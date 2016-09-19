@@ -26,7 +26,7 @@ int demo_main(int argc, char *argv[])
 	/* Generate a return IN_TO_NETWORK IMMEDIATE section */
 	printf("Generating back to network table section\n");
 	scte35_set_next_event_id(scte35, 1);
-	scte35_generate_immediate_out_of_network(scte35, 0x1000);
+	scte35_generate_immediate_in_to_network(scte35, 0x1000);
 	hexdump(scte35->section, scte35->section_length, 32);
 
 	printf("program complete.\n");
