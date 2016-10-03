@@ -29,6 +29,78 @@
 extern "C" {
 #endif
 
+struct scte35_break_duration_s
+{
+	uint8_t  auto_return;
+	uint64_t duration;
+};
+
+struct scte35_splice_null_s
+{
+};
+
+struct scte35_splice_time_s
+{
+	uint8_t  time_specified_flag;
+	uint64_t pts_time;
+};
+
+struct scte35_splice_component_s
+{
+	uint8_t component_tag;
+	struct scte35_splice_time_s splice_time;
+};
+
+struct scte35_splice_insert_s
+{
+	uint32_t splice_event_id;
+	uint8_t  splice_event_cancel_indicator;
+	uint8_t  out_of_network_indicator;
+	uint8_t  program_splice_flag;
+	uint8_t  duration_flag;
+	uint8_t  splice_immediate_flag;
+	struct scte35_splice_time_s splice_time;
+
+	/* We don't support program_splice_flag == 0 */
+
+	/* We don't support component counts */
+	uint8_t   component_count;
+	struct scte35_splice_component_s components[256];
+
+	struct scte35_break_duration_s duration;
+
+	uint16_t  unique_program_id;
+	uint8_t   avail_num;
+	uint8_t   avails_expected;
+};
+
+
+struct scte35_splice_info_section_s
+{
+	uint8_t  table_id;
+	uint8_t  section_syntax_indicator;
+	uint8_t  private_indicator;
+	uint16_t section_length;
+	uint8_t  protocol_version;
+	uint8_t  encrypted_packet;
+	uint8_t  encryption_algorithm;
+	uint64_t pts_adjustment;
+	uint8_t  cw_index;
+	uint16_t tier;
+	uint16_t splice_command_length;
+	uint8_t  splice_command_type;
+	union {
+		struct scte35_splice_null_s splice_null;
+		struct scte35_splice_insert_s splice_insert;
+	};
+
+	/* We don't support descriptor parsing. */
+	uint16_t descriptor_loop_length;
+
+	uint32_t e_crc_32;
+	uint32_t crc_32;
+};
+
 struct scte35_context_s
 {
 	/* User visible fields */

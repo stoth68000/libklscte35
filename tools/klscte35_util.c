@@ -6,6 +6,7 @@
 
 /* External tool hooks */
 extern int demo_main(int argc, char *argv[]);
+extern int parse_main(int argc, char *argv[]);
 
 typedef int (*func_ptr)(int, char *argv[]);
 
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
 		func_ptr func;
 	} apps[] = {
 		{ "klscte35_util",		demo_main, },
+		{ "klscte35_parse",		parse_main, },
 		{ 0, 0 },
 	};
 	char *appname = basename(argv[0]);

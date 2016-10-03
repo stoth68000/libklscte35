@@ -433,3 +433,115 @@ int scte35_set_next_event_id(struct scte35_context_s *ctx, uint32_t eventId)
 	return 0;
 }
 
+static uint8_t *parse_time(struct scte35_splice_time_s *st, uint8_t *p)
+{
+	st->time_specified_flag = *(p + 0) & 0x80 ? 1 : 0;
+	if (st->time_specified_flag == 1) {
+		st->pts_time = ((uint64_t)*(p + 0) << 32 |
+			(uint64_t)*(p + 1) << 24 |
+			(uint64_t)*(p + 2) << 16 |
+			(uint64_t)*(p + 3) << 8 |
+			(uint64_t)*(p + 4)) & 0x1ffffffffL;
+		return p + 5;
+	} else
+		return p + 1;
+}
+
+static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35_splice_component_s *c, uint8_t *p)
+{
+	c->component_tag = *p; p++;
+	if (si->splice_immediate_flag == 0)
+		p = parse_time(&c->splice_time, p);
+
+	return p;
+}
+
+int scte35_parse(uint8_t *section, unsigned int byteCount)
+{
+	uint8_t *p = section;
+
+	struct scte35_splice_info_section_s sis, *s = &sis;
+	s->table_id = *(section + 0);
+	if (s->table_id != SCTE35_TABLE_ID)
+		return -1;
+
+	s->section_syntax_indicator = *(section + 1) & 0x80 ? 1 : 0;
+	s->private_indicator = *(section + 1) & 0x40 ? 1 : 0;
+        s->section_length = (*(section + 1) << 8 | *(section + 2)) & 0xfff;
+	s->protocol_version = scte35_get_protocol(section);
+	s->encrypted_packet = scte35_is_encrypted(section);
+	s->encryption_algorithm = (*(section + 4) >> 1) & 0x3f;
+	s->pts_adjustment = scte35_get_pts_adjustment(section);
+	s->cw_index = *(section + 8);
+        s->tier = (*(section + 9) << 8 | *(section + 10)) & 0xfff;
+	s->splice_command_length = scte35_get_command_length(section);
+	s->splice_command_type = scte35_get_command_type(section);
+
+	/* null processing */
+
+	/* insert processing */
+	if (s->splice_command_type == 0x05) {
+		struct scte35_splice_insert_s *si = &s->splice_insert;
+		si->splice_event_id = *(section + 14) << 24 | *(section + 15) << 16 | *(section + 16) << 8 | *(section + 17);
+		si->splice_event_cancel_indicator = *(section + 18) & 0x80 ? 1 : 0;
+		if (si->splice_event_cancel_indicator == 0) {
+			si->out_of_network_indicator = *(section + 19) & 0x80 ? 1 : 0;
+			si->program_splice_flag = *(section + 19) & 0x40 ? 1 : 0;
+			si->duration_flag = *(section + 19) & 0x20 ? 1 : 0;
+			si->splice_immediate_flag = *(section + 19) & 0x10 ? 1 : 0;
+
+			p = section + 20;
+			if ((si->program_splice_flag == 1) && (si->splice_immediate_flag == 0)) {
+				struct scte35_splice_time_s *st = &si->splice_time;
+				p = parse_time(st, p);
+			}
+
+			if (si->program_splice_flag == 0) {
+				/* We don't support Component counts */
+				si->component_count = *p;
+				p++;
+				for (int i = 0; i < si->component_count; i++)
+					p = parse_component(si, &si->components[i], p);
+				
+			}
+
+			if (si->duration_flag == 1) {
+				struct scte35_break_duration_s *d = &si->duration;
+				d->auto_return = *(p + 0) & 0x80 ? 1 : 0;
+				d->duration = ((uint64_t)*(p + 0) << 32 |
+					(uint64_t)*(p + 1) << 24 |
+					(uint64_t)*(p + 2) << 16 |
+					(uint64_t)*(p + 3) << 8 |
+					(uint64_t)*(p + 4)) & 0x1ffffffffL;
+
+				p += 5;
+			}
+
+			si->unique_program_id = *(p + 0) << 8 | *(p + 1); p+= 2;
+			si->avail_num = *p; p++;
+			si->avails_expected = *p; p++;
+			
+		} /* si->splice_event_cancel_indicator == 0 */
+
+	} /* s->splice_command_type == 0x05 */
+
+	s->descriptor_loop_length = *(p + 0) << 8 | *(p + 1); p+= 2;
+
+	/* TODO: We don't support descriptor parsing, yet. */
+	for (int i = 0; i < s->descriptor_loop_length; i++) {
+		uint8_t tag = *p; p++;
+		uint8_t len = *p; p++;
+		p += len;
+	}
+
+	/* TODO: Alignment stuff, we've never seen a frame with alignment stuffing */
+
+	if (s->encrypted_packet) {
+		s->e_crc_32 = 0;
+	}
+
+	s->crc_32 = 0;
+
+	return 0;
+}
+
