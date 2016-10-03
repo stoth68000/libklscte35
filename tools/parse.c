@@ -18,7 +18,7 @@ static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typ
 <SCTE35 command="5" command_str="insert" pts_adjustment="67521" event_id="692" cancel="0" out_of_network="1" program_splice="1" splice_time="immediate" unique_program_id="1">
 */
 
-const uint8_t mouse_oon[] = {
+uint8_t mouse_oon[] = {
 	0xfc, 0x30, 0x1b, 0x00, 0x00, 0x00, 0x01, 0x07,
 	0xc1, 0x00, 0xff, 0xf0, 0x0a, 0x05, 0x00, 0x00,
 	0x02, 0xb4, 0x7f, 0xdf, 0x00, 0x01, 0x01, 0x01,
@@ -40,6 +40,8 @@ static int test01(uint8_t *sec, int byteCount)
 
 	uint8_t protocol = scte35_get_protocol(sec);
 	printf("protocol = %02x\n", protocol);
+
+	return 0;
 }
 
 int parse_main(int argc, char *argv[])

@@ -456,15 +456,15 @@ static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35
 	return p;
 }
 
-int scte35_parse(uint8_t *section, unsigned int byteCount)
+struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
 {
+	if (*(section + 0) != SCTE35_TABLE_ID)
+		return 0;
+
+	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
+
 	uint8_t *p = section;
-
-	struct scte35_splice_info_section_s sis, *s = &sis;
 	s->table_id = *(section + 0);
-	if (s->table_id != SCTE35_TABLE_ID)
-		return -1;
-
 	s->section_syntax_indicator = *(section + 1) & 0x80 ? 1 : 0;
 	s->private_indicator = *(section + 1) & 0x40 ? 1 : 0;
         s->section_length = (*(section + 1) << 8 | *(section + 2)) & 0xfff;
@@ -542,6 +542,10 @@ int scte35_parse(uint8_t *section, unsigned int byteCount)
 
 	s->crc_32 = 0;
 
-	return 0;
+	return s;
 }
 
+void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
+{
+	free(s);
+}
