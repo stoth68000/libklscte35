@@ -16,9 +16,9 @@ AC_PROG_LIBTOOL
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
-AC_CHECK_HEADERS([bitstream/scte/35.h], 
-                 [break], 
-                 [AC_MSG_ERROR([biTStream headers not found or not usable])]) 
+#AC_CHECK_HEADERS([bitstream/scte/35.h], 
+#                 [break], 
+#                 [AC_MSG_ERROR([biTStream headers not found or not usable])]) 
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UINT16_T
