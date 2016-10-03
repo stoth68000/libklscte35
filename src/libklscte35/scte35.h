@@ -146,6 +146,7 @@ int scte35_set_next_event_id(struct scte35_context_s *ctx, uint32_t eventId);
 
 /* Caller must call scte35_splice_info_section_free() after they're done with the parse result. */
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount);
+void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s);
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
 
 #ifdef __cplusplus

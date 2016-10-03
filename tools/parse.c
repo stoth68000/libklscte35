@@ -35,11 +35,11 @@ uint8_t mouse_oon[] = {
 
 static int test01(uint8_t *sec, int byteCount)
 {
-	uint8_t cmdtype = scte35_get_command_type(sec);
-	printf("cmttype = %02x\n", cmdtype);
-
-	uint8_t protocol = scte35_get_protocol(sec);
-	printf("protocol = %02x\n", protocol);
+	struct scte35_splice_info_section_s *s = scte35_splice_info_section_parse(sec, byteCount);
+	if (s) {
+		scet35_splice_info_section_print(s);
+		scte35_splice_info_section_free(s);
+	}
 
 	return 0;
 }

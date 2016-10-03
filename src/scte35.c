@@ -456,6 +456,52 @@ static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35
 	return p;
 }
 
+#define SHOW_LINE_U32(indent, field) printf("%s%s = 0x%x (%d)\n", indent, #field, field, field);
+#define SHOW_LINE_U64(indent, field) printf("%s%s = %" PRIu64 "\n", indent, #field, field);
+void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s)
+{
+	SHOW_LINE_U32("", s->table_id);
+	SHOW_LINE_U32("", s->section_syntax_indicator);
+	SHOW_LINE_U32("", s->private_indicator);
+	SHOW_LINE_U32("", s->section_length);
+	SHOW_LINE_U32("", s->protocol_version);
+	SHOW_LINE_U32("", s->encrypted_packet);
+	SHOW_LINE_U32("", s->encryption_algorithm);
+	SHOW_LINE_U64("", s->pts_adjustment);
+	SHOW_LINE_U32("", s->cw_index);
+	SHOW_LINE_U32("", s->tier);
+	SHOW_LINE_U32("", s->splice_command_length);
+	SHOW_LINE_U32("", s->splice_command_type);
+
+	if (s->splice_command_type == 0x05 /* Insert */) {
+		SHOW_LINE_U32("\t", s->splice_insert.splice_event_id);
+		SHOW_LINE_U32("\t", s->splice_insert.splice_event_cancel_indicator);
+		SHOW_LINE_U32("\t", s->splice_insert.out_of_network_indicator);
+		SHOW_LINE_U32("\t", s->splice_insert.program_splice_flag);
+		SHOW_LINE_U32("\t", s->splice_insert.duration_flag);
+		SHOW_LINE_U32("\t", s->splice_insert.splice_immediate_flag);
+		SHOW_LINE_U32("\t", s->splice_insert.splice_time.time_specified_flag);
+		SHOW_LINE_U64("\t", s->splice_insert.splice_time.pts_time);
+		SHOW_LINE_U32("\t", s->splice_insert.component_count);
+
+		if (s->splice_insert.duration_flag) {
+			SHOW_LINE_U32("\t\t", s->splice_insert.duration.auto_return);
+			SHOW_LINE_U64("\t\t", s->splice_insert.duration.duration);
+		}
+
+		SHOW_LINE_U32("\t", s->splice_insert.unique_program_id);
+		SHOW_LINE_U32("\t", s->splice_insert.avail_num);
+		SHOW_LINE_U32("\t", s->splice_insert.avails_expected);
+
+	}
+
+        /* We don't support descriptor parsing. */
+	SHOW_LINE_U32("", s->descriptor_loop_length);
+
+	SHOW_LINE_U32("", s->e_crc_32);
+	SHOW_LINE_U32("", s->crc_32);
+}
+
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
 {
 	if (*(section + 0) != SCTE35_TABLE_ID)
@@ -477,10 +523,9 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 	s->splice_command_length = scte35_get_command_length(section);
 	s->splice_command_type = scte35_get_command_type(section);
 
-	/* null processing */
-
-	/* insert processing */
-	if (s->splice_command_type == 0x05) {
+	if (s->splice_command_type == 0x00 /* null processing */) {
+	} else
+	if (s->splice_command_type == 0x05 /* insert processing */) {
 		struct scte35_splice_insert_s *si = &s->splice_insert;
 		si->splice_event_id = *(section + 14) << 24 | *(section + 15) << 16 | *(section + 16) << 8 | *(section + 17);
 		si->splice_event_cancel_indicator = *(section + 18) & 0x80 ? 1 : 0;
@@ -524,6 +569,13 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 		} /* si->splice_event_cancel_indicator == 0 */
 
 	} /* s->splice_command_type == 0x05 */
+	else {
+		/* No support for schedule, time_signal or bandwidth reservervation, or
+		 * private commands.
+		 */
+		scte35_splice_info_section_free(s);
+		return 0;
+	}
 
 	s->descriptor_loop_length = *(p + 0) << 8 | *(p + 1); p+= 2;
 
