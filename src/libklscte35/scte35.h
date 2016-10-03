@@ -149,6 +149,10 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s);
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
 
+/* Convert SCTE35 to SCTE104 */
+int scte35_create_scte104_message(struct scte35_context_s *ctx,
+        struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount);
+
 #ifdef __cplusplus
 };
 #endif

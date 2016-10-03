@@ -601,3 +601,146 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
 	free(s);
 }
+
+static int scte104_generate_immediate_out_of_network(const struct scte35_splice_insert_s *si,
+	uint8_t **buf, uint16_t *byteCount)
+{
+	uint8_t *b = calloc(1, 32);
+	uint8_t *p = b;
+
+	/* single_message_operation() */
+	*(p++) = 0x08;			/* Version */
+
+	*(p++) = 0x00;			/* opID - init_request_data() */
+	*(p++) = 0x01;			/* ... */
+
+	*(p++) = 0x00;			/* messageSize (entire size excluding Version) */
+	*(p++) = 0x1b;			/* ... */
+
+	*(p++) = 0xff;			/* result */
+	*(p++) = 0xff;			/* ... */
+
+	*(p++) = 0xff;			/* result_expansion */
+	*(p++) = 0xff;			/* ... */
+
+	*(p++) = 0x00;			/* protocol_version */
+	*(p++) = 0x00;			/* AS_index */
+	*(p++) = 0x00;			/* message_number */
+
+	*(p++) = 0x00;			/* DPI_PID_index */
+	*(p++) = 0x00;			/* ... */
+
+	/* splice_request_data() */
+	*(p++) = 0x02;			/* spliceStart_immediate */
+
+	/* splice_event_index */
+	*(p++) = si->splice_event_id >> 24;
+	*(p++) = si->splice_event_id >> 16;
+	*(p++) = si->splice_event_id >>  4;
+	*(p++) = si->splice_event_id;
+
+	/* unique_program_id */
+	*(p++) = si->unique_program_id >> 8;
+	*(p++) = si->unique_program_id;
+
+	*(p++) = 0x00;			/* pre_roll_time */
+	*(p++) = 0x00;			/* ... */
+
+	*(p++) = 0x01;			/* break_duration in 1/10 secs (30) */
+	*(p++) = 0x2c;			/* ... */
+
+	*(p++) = si->avail_num;		/* avail_num */
+	*(p++) = si->avails_expected;	/* avails_expected */
+	*(p++) = 0x01;			/* auto_return_flag */
+
+	*buf = b;
+	*byteCount = (p - b);
+	return 0;
+}
+
+static int scte104_generate_immediate_in_to_network(const struct scte35_splice_insert_s *si,
+	uint8_t **buf, uint16_t *byteCount)
+{
+	uint8_t *b = calloc(1, 32);
+	uint8_t *p = b;
+
+	/* single_message_operation() */
+	*(p++) = 0x08;			/* Version */
+
+	*(p++) = 0x00;			/* opID - init_request_data() */
+	*(p++) = 0x01;			/* ... */
+
+	*(p++) = 0x00;			/* messageSize (entire size excluding Version) */
+	*(p++) = 0x1b;			/* ... */
+
+	*(p++) = 0xff;			/* result */
+	*(p++) = 0xff;			/* ... */
+
+	*(p++) = 0xff;			/* result_expansion */
+	*(p++) = 0xff;			/* ... */
+
+	*(p++) = 0x00;			/* protocol_version */
+	*(p++) = 0x00;			/* AS_index */
+	*(p++) = 0x00;			/* message_number */
+
+	*(p++) = 0x00;			/* DPI_PID_index */
+	*(p++) = 0x00;			/* ... */
+
+	/* splice_request_data() */
+	*(p++) = 0x04;			/* spliceEnd_immediate */
+
+	/* splice_event_index */
+	*(p++) = si->splice_event_id >> 24;
+	*(p++) = si->splice_event_id >> 16;
+	*(p++) = si->splice_event_id >>  4;
+	*(p++) = si->splice_event_id;
+
+	/* unique_program_id */
+	*(p++) = si->unique_program_id >> 8;
+	*(p++) = si->unique_program_id;
+
+	*(p++) = 0x00;			/* pre_roll_time */
+	*(p++) = 0x00;			/* ... */
+
+	*(p++) = 0x00;			/* break_duration in 1/10 secs (30) */
+	*(p++) = 0x00;			/* ... */
+
+	*(p++) = si->avail_num;		/* avail_num */
+	*(p++) = si->avails_expected;	/* avails_expected */
+	*(p++) = 0x01;			/* auto_return_flag */
+
+	*buf = b;
+	*byteCount = (p - b);
+	return 0;
+}
+
+int scte35_create_scte104_message(struct scte35_context_s *ctx,
+	struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount)
+{
+	int ret = -1;
+
+	/* We support some very specific SCTE104 message types. Immediate INTO/OUT-OF messages.
+	 * Only 'insert' messages, no other message support. Return an error if we're not sure
+	 * what kind of message is being requested.
+	 */
+	if (s->splice_command_type != 0x05 /* Insert */)
+		return -1;
+
+	struct scte35_splice_insert_s *si = &s->splice_insert;
+
+	if (si->splice_event_cancel_indicator) {
+		/* TODO: Create a SCTE104 cancel event */
+		return -1;
+	}
+
+	if (si->splice_event_cancel_indicator == 0) {
+		if (si->splice_immediate_flag == 0)
+			return -1;
+		if (si->out_of_network_indicator == 1)
+			ret = scte104_generate_immediate_out_of_network(si, buf, byteCount);
+		else
+			ret = scte104_generate_immediate_in_to_network(si, buf, byteCount);
+	}
+
+	return ret;
+}
