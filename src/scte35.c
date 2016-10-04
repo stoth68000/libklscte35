@@ -734,8 +734,10 @@ int scte35_create_scte104_message(struct scte35_context_s *ctx,
 	}
 
 	if (si->splice_event_cancel_indicator == 0) {
-		if (si->splice_immediate_flag == 0)
+		if (si->splice_immediate_flag == 0) {
+			fprintf(stderr, "%s() we won't support events that are not immediate\n", __func__);
 			return -1;
+		}
 		if (si->out_of_network_indicator == 1)
 			ret = scte104_generate_immediate_out_of_network(si, buf, byteCount);
 		else

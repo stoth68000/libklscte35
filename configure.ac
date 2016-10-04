@@ -14,11 +14,21 @@ AC_PROG_CXX
 AC_PROG_RANLIB
 AC_PROG_LIBTOOL
 
+if test `uname -s` = "Darwin"
+then
+CFLAGS+=" -I/usr/local/include"
+LDFLAGS+="-L/usr/local/lib"
+fi
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
 #AC_CHECK_HEADERS([bitstream/scte/35.h], 
 #                 [break], 
 #                 [AC_MSG_ERROR([biTStream headers not found or not usable])]) 
+
+AC_CHECK_HEADERS([libklvanc/vanc.h],
+                 [break],
+                 [AC_MSG_ERROR([libklvanc headers not found or not usable])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UINT16_T
