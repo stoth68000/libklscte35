@@ -60,8 +60,26 @@ static int parse(struct scte35_context_s *scte35, uint8_t *sec, int byteCount)
 
 			/* Convert a SCTE104 message into a standard VANC line. */
 
-			/* Free the allocated resource */
-			free(buf);
+			/* Take an array of payload, create a fully formed VANC message,
+			 * including parity bits, header signatures, message type,
+			 * trailing checksum.
+			 * bitDepth of 10 is the only valid input value.
+			 * did: 0x41 + sdid: 0x07 = SCTE104
+			 */
+			uint16_t *vancWords;
+			uint16_t vancWordCount;
+			ret = vanc_sdi_create_payload(0x07, 0x41, buf, byteCount, &vancWords, &vancWordCount, 10);
+			if (ret == 0) {
+				printf("SCTE104 in VANC: ");
+				for (int i = 0; i < vancWordCount; i++)
+					printf("%03x ", *(vancWords + i));
+				printf("\n");
+
+				free(vancWords); /* Free the allocated resource */
+			} else
+				fprintf(stderr, "Error creating VANC message, ret = %d\n", ret);
+
+			free(buf); /* Free the allocated resource */
 		} else {
 			fprintf(stderr, "Unable to convert SCTE35 to SCTE104, ret = %d\n", ret);
 		}
