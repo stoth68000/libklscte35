@@ -48,7 +48,7 @@ struct scte35_splice_time_s
 struct scte35_splice_component_s
 {
 	uint8_t component_tag;
-	struct scte35_splice_time_s splice_time;
+	struct  scte35_splice_time_s splice_time;
 };
 
 struct scte35_splice_insert_s
@@ -59,19 +59,19 @@ struct scte35_splice_insert_s
 	uint8_t  program_splice_flag;
 	uint8_t  duration_flag;
 	uint8_t  splice_immediate_flag;
-	struct scte35_splice_time_s splice_time;
+	struct   scte35_splice_time_s splice_time;
 
 	/* We don't support program_splice_flag == 0 */
 
 	/* We don't support component counts */
-	uint8_t   component_count;
-	struct scte35_splice_component_s components[256];
+	uint8_t  component_count;
+	struct   scte35_splice_component_s components[256];
 
-	struct scte35_break_duration_s duration;
+	struct   scte35_break_duration_s duration;
 
-	uint16_t  unique_program_id;
-	uint8_t   avail_num;
-	uint8_t   avails_expected;
+	uint16_t unique_program_id;
+	uint8_t  avail_num;
+	uint8_t  avails_expected;
 };
 
 
@@ -104,14 +104,14 @@ struct scte35_splice_info_section_s
 struct scte35_context_s
 {
 	/* User visible fields */
-	uint8_t pkt[188]; /* Assumption, sections always < this array size */
-	uint8_t section[4096];
+	uint8_t  pkt[188]; /* Assumption, sections always < this array size */
+	uint8_t  section[4096];
 	uint16_t section_length;
 
 	/* Private content, caller should not modify or inspect. */
-	int verbose;
+	int      verbose;
 	uint16_t outputPid;
-	uint8_t cc;
+	uint8_t  cc;
 	uint32_t eventId;
 	uint16_t uniqueProgramId;
 };
