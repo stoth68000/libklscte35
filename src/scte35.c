@@ -61,65 +61,6 @@ static void print_wrapper(void *_unused, const char *fmt, ...)
 	vprintf(v, args);
 	va_end(args);
 }
-//static inline void scte35_print(const uint8_t *p_scte35, print_wrapper, void *print_opaque, print_type_t i_print_type);
-// eit_print(p_section, print_wrapper, NULL, iconv_wrapper, NULL, PRINT_XML);
-//
-//
-
-#if 0
-/*****************************************************************************
- * iconv_wrapper
- *****************************************************************************/
-static char *iconv_append_null(const char *p_string, size_t i_length)
-{
-    char *psz_string = malloc(i_length + 1);
-    memcpy(psz_string, p_string, i_length);
-    psz_string[i_length] = '\0';
-    return psz_string;
-}
-
-static char *iconv_wrapper(void *_unused, const char *psz_encoding,
-                           char *p_string, size_t i_length)
-{
-    char *psz_string, *p;
-    size_t i_out_length;
-
-    if (!strcmp(psz_encoding, psz_native_encoding))
-        return iconv_append_null(p_string, i_length);
-
-    if (iconv_handle != (iconv_t)-1 &&
-        strcmp(psz_encoding, psz_current_encoding)) {
-        iconv_close(iconv_handle);
-        iconv_handle = (iconv_t)-1;
-    }
-
-    if (iconv_handle == (iconv_t)-1)
-        iconv_handle = iconv_open(psz_native_encoding, psz_encoding);
-    if (iconv_handle == (iconv_t)-1) {
-        fprintf(stderr, "couldn't convert from %s to %s (%m)\n", psz_encoding,
-                psz_native_encoding);
-        return iconv_append_null(p_string, i_length);
-    }
-    psz_current_encoding = psz_encoding;
-
-    /* converted strings can be up to six times larger */
-    i_out_length = i_length * 6;
-    p = psz_string = malloc(i_out_length);
-    if (iconv(iconv_handle, &p_string, &i_length, &p, &i_out_length) == -1) {
-        fprintf(stderr, "couldn't convert from %s to %s (%m)\n", psz_encoding,
-                psz_native_encoding);
-        free(psz_string);
-        return iconv_append_null(p_string, i_length);
-    }
-    if (i_length)
-        fprintf(stderr, "partial conversion from %s to %s\n", psz_encoding,
-                psz_native_encoding);
-
-    *p = '\0';
-    return psz_string;
-}
-#endif
-
 
 /* Return the number of TS packets we've generated */
 static int output_psi_section(struct scte35_context_s *ctx, uint8_t *section, uint16_t pid, uint8_t *cc)
