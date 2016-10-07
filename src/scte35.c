@@ -340,6 +340,7 @@ ff ff ff ff ff ff ff ff ff ff ff ff
 void scte35_initialize(struct scte35_context_s *ctx, uint16_t outputPid)
 {
 	dprintf(1, "%s()\n", __func__);
+/* TODO: What is this and why do we need it? */
 static int count = 0;
 	if (count++ > 0)
 		return;
