@@ -1,9 +1,8 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-CFLAGS = -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BITS=64 -O3 \
+CFLAGS += -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BITS=64 -O3 \
 	-D_BSD_SOURCE \
-	--std=c99 \
 	-I../src \
 	-L../src/.libs -lklscte35 -lpthread \
 	-DKL_USERSPACE -lz -ldl -lklscte35 -lklvanc
