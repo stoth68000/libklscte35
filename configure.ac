@@ -9,6 +9,7 @@ AC_CANONICAL_HOST
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CC_C99
 AC_PROG_CXX
 
 AC_PROG_RANLIB
@@ -22,9 +23,9 @@ fi
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
-#AC_CHECK_HEADERS([bitstream/scte/35.h], 
-#                 [break], 
-#                 [AC_MSG_ERROR([biTStream headers not found or not usable])]) 
+AC_CHECK_HEADERS([bitstream/scte/35.h], 
+                 [break], 
+                 [AC_MSG_ERROR([biTStream headers not found or not usable])]) 
 
 AC_CHECK_HEADERS([libklvanc/vanc.h],
                  [break],
