@@ -6,8 +6,8 @@ lib_LTLIBRARIES = libklscte35.la
 libklscte35_la_SOURCES  = scte35.c
 
 libklscte35_la_CFLAGS = -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" \
-	-D_FILE_OFFSET_BITS=64 -O3 --std=c99 -D_BSD_SOURCE -I../include -I/usr/local/include \
-	-DKL_USERSPACE -L/usr/local/lib
+	-D_FILE_OFFSET_BITS=64 -O3 --std=c99 -D_BSD_SOURCE \
+	-DKL_USERSPACE
 
 if DEBUG
   libklscte35_la_CFLAGS += -g
