@@ -21,6 +21,17 @@ CFLAGS+=" -I/usr/local/include"
 LDFLAGS+="-L/usr/local/lib"
 fi
 
+# We always build with -fPIC in case our static libraries end up
+# being linked into a consumer's shared library
+AC_MSG_CHECKING(whether fPIC compiler option is accepted)
+SAVED_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -fPIC -Werror"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [return 0;])],
+    [AC_MSG_RESULT(yes)
+     CFLAGS="$SAVED_CFLAGS -fPIC"],
+    [AC_MSG_RESULT(no)
+     CFLAGS="$SAVED_CFLAGS"])
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
 AC_CHECK_HEADERS([bitstream/scte/35.h], 
