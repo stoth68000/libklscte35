@@ -717,6 +717,9 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
 {
+	if ((!ctx) || (!si) || (!buffer) || (buffer_length_bytes < 128))
+		return -1;
+
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buffer, buffer_length_bytes);
 
@@ -741,6 +744,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
+		assert(0);
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 
@@ -790,9 +794,11 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
 		/* TODO: Not supported */
+		assert(0);
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
 		/* TODO: Not supported */
+		assert(0);
 	}
 	int posb = klbs_get_byte_count(bs);
 	si->splice_command_length = posb - posa;
