@@ -750,7 +750,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 		klbs_write_bits(bs, i->splice_event_cancel_indicator, 1);
 		klbs_write_bits(bs, 0xff, 7); /* Reserved */
 		if (i->splice_event_cancel_indicator == 0) {
-// MMM
+
 			klbs_write_bits(bs, i->out_of_network_indicator, 1);
 			klbs_write_bits(bs, i->program_splice_flag, 1);
 			klbs_write_bits(bs, i->duration_flag, 1);
@@ -760,7 +760,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 				klbs_write_bits(bs, i->splice_time.time_specified_flag, 1);
 				if (i->splice_time.time_specified_flag == 1) {
 					klbs_write_bits(bs, 0xff, 6); /* Reserved */
-					klbs_write_bits(bs, i->out_of_network_indicator, 33);
+					klbs_write_bits(bs, i->splice_time.pts_time, 33);
 				} else
 					klbs_write_bits(bs, 0xff, 7); /* Reserved */
 			}
@@ -781,10 +781,18 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		klbs_write_bits(bs, si->time_signal.time_specified_flag, 1);
+		if (si->time_signal.time_specified_flag == 1) {
+			klbs_write_bits(bs, 0xff, 6); /* Reserved */
+			klbs_write_bits(bs, si->time_signal.pts_time, 33);
+		} else
+			klbs_write_bits(bs, 0xff, 7); /* Reserved */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
+		/* TODO: Not supported */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
+		/* TODO: Not supported */
 	}
 	int posb = klbs_get_byte_count(bs);
 	si->splice_command_length = posb - posa;
