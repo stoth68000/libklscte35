@@ -35,6 +35,13 @@
 extern "C" {
 #endif
 
+#define SCTE35_COMMAND_TYPE__SPLICE_NULL	0x00
+#define SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE	0x04
+#define SCTE35_COMMAND_TYPE__SPLICE_INSERT	0x05
+#define SCTE35_COMMAND_TYPE__TIME_SIGNAL	0x06
+#define SCTE35_COMMAND_TYPE__BW_RESERVATION	0x07
+#define SCTE35_COMMAND_TYPE__PRIVATE		0xff
+
 /**
  * @brief	TODO - Brief description goes here.
  */
@@ -179,6 +186,9 @@ int scte35_generate_immediate_in_to_network(struct scte35_context_s *ctx, uint16
  */
 int scte35_generate_heartbeat(struct scte35_context_s *ctx);
 
+int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
+	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes);
+
 /**
  * @brief	Allow the next event ID to be set, so that SCTE104 translated
  *		packets, that contain their own eventID, we will to honor.
@@ -203,6 +213,12 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
  * @param[in]	struct scte35_splice_info_section_s *s - Brief description goes here.
  */
 void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s);
+
+/**
+ * @brief	Allocate a clean structure and populate any mandatory fixed fields.
+ * @param[in]	uint8_t command_type - Eg. SCTE35_COMMAND_TYPE__SPLICE_NULL
+ */
+struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t command_type);
 
 /**
  * @brief	TODO - Brief description goes here.

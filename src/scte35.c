@@ -37,6 +37,8 @@
 #include <bitstream/scte/35_print.h>
 
 #include <libklscte35/scte35.h>
+#include <libiso13818/iso13818.h>
+#include "klbitstream_readwriter.h"
 
 #define dprintf(level, fmt, arg...) \
 do {\
@@ -686,4 +688,82 @@ int scte35_create_scte104_message(struct scte35_context_s *ctx,
 	}
 
 	return ret;
+}
+
+struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t command_type)
+{
+	switch (command_type) {
+	case SCTE35_COMMAND_TYPE__SPLICE_NULL:
+	case SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE:
+	case SCTE35_COMMAND_TYPE__SPLICE_INSERT:
+	case SCTE35_COMMAND_TYPE__TIME_SIGNAL:
+	case SCTE35_COMMAND_TYPE__BW_RESERVATION:
+	case SCTE35_COMMAND_TYPE__PRIVATE:
+		break;
+	default:
+		return 0;
+	}
+
+	struct scte35_splice_info_section_s *si = calloc(1, sizeof(*si));
+	if (!si)
+		return 0;
+
+	si->table_id = 0xFC;
+	si->splice_command_type = command_type;
+
+	return si;
+}
+
+int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
+	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buffer, buffer_length_bytes);
+
+	klbs_write_bits(bs, si->table_id, 8);
+	klbs_write_bits(bs, si->section_syntax_indicator, 1);
+	klbs_write_bits(bs, si->private_indicator, 1);
+	klbs_write_bits(bs, 0xff, 2); /* Reserved */
+	klbs_write_bits(bs, 0, 12); /* Section length, to be filled later */
+
+	klbs_write_bits(bs, si->protocol_version, 8);
+	klbs_write_bits(bs, si->encrypted_packet, 1);
+	klbs_write_bits(bs, si->encryption_algorithm, 6);
+	klbs_write_bits(bs, si->pts_adjustment, 33);
+	klbs_write_bits(bs, si->cw_index, 8);
+	klbs_write_bits(bs, si->tier, 12);
+
+	klbs_write_bits(bs, si->splice_command_length, 12); /* to be filled later */
+	klbs_write_bits(bs, si->splice_command_type, 8);
+
+	int posa = klbs_get_byte_count(bs);
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_NULL) {
+		/* Nothing to do */
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
+	}
+	int posb = klbs_get_byte_count(bs);
+	si->splice_command_length = posb - posa;
+
+	/* Patch in the command length */
+	bs->buf[11] |= ((si->splice_command_length >> 8) & 0x0f);
+	bs->buf[12]  =  (si->splice_command_length       & 0xff);
+
+	/* Checksum */
+	unsigned int crc32 = 0;
+	iso13818_getCRC32(klbs_get_buffer(bs), klbs_get_byte_count(bs), &crc32);
+	klbs_write_bits(bs, crc32, 32);
+	klbs_write_buffer_complete(bs);
+
+	int count = klbs_get_byte_count(bs);
+	klbs_free(bs);
+	return count;
 }
