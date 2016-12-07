@@ -213,7 +213,7 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
  * @brief	TODO - Brief description goes here.
  * @param[in]	struct scte35_splice_info_section_s *s - Brief description goes here.
  */
-void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s);
+void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s);
 
 /**
  * @brief	Allocate a clean structure and populate any mandatory fixed fields.

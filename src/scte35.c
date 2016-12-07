@@ -402,7 +402,7 @@ static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35
 
 #define SHOW_LINE_U32(indent, field) printf("%s%s = 0x%x (%d)\n", indent, #field, field, field);
 #define SHOW_LINE_U64(indent, field) printf("%s%s = %" PRIu64 "\n", indent, #field, field);
-void scet35_splice_info_section_print(struct scte35_splice_info_section_s *s)
+void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 {
 	SHOW_LINE_U32("", s->table_id);
 	SHOW_LINE_U32("", s->section_syntax_indicator);
