@@ -64,7 +64,7 @@ static int parse(uint8_t *sec, int byteCount)
 	if (s) {
 
 		/* Dump struct to console */
-		scet35_splice_info_section_print(s);
+		scte35_splice_info_section_print(s);
 
 		/* Free the allocated resource */
 		scte35_splice_info_section_free(s);

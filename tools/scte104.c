@@ -67,7 +67,7 @@ static int parse(struct scte35_context_s *scte35, uint8_t *sec, int byteCount)
 	if (s) {
 
 		/* Dump struct to console */
-		scet35_splice_info_section_print(s);
+		scte35_splice_info_section_print(s);
 
 		/* Optionally, Convert the SCTE35 message into a SCTE104 command */
 		uint8_t *buf;
