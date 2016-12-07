@@ -122,6 +122,7 @@ struct scte35_splice_info_section_s
 	union {
 		struct scte35_splice_null_s splice_null;
 		struct scte35_splice_insert_s splice_insert;
+		struct scte35_splice_time_s time_signal;
 	};
 
 	/* We don't support descriptor parsing. */
