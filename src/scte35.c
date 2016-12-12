@@ -420,22 +420,24 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	if (s->splice_command_type == 0x05 /* Insert */) {
 		SHOW_LINE_U32("\t", s->splice_insert.splice_event_id);
 		SHOW_LINE_U32("\t", s->splice_insert.splice_event_cancel_indicator);
-		SHOW_LINE_U32("\t", s->splice_insert.out_of_network_indicator);
-		SHOW_LINE_U32("\t", s->splice_insert.program_splice_flag);
-		SHOW_LINE_U32("\t", s->splice_insert.duration_flag);
-		SHOW_LINE_U32("\t", s->splice_insert.splice_immediate_flag);
-		SHOW_LINE_U32("\t", s->splice_insert.splice_time.time_specified_flag);
-		SHOW_LINE_U64("\t", s->splice_insert.splice_time.pts_time);
-		SHOW_LINE_U32("\t", s->splice_insert.component_count);
+		if (s->splice_insert.splice_event_cancel_indicator == 0) {
+			SHOW_LINE_U32("\t", s->splice_insert.out_of_network_indicator);
+			SHOW_LINE_U32("\t", s->splice_insert.program_splice_flag);
+			SHOW_LINE_U32("\t", s->splice_insert.duration_flag);
+			SHOW_LINE_U32("\t", s->splice_insert.splice_immediate_flag);
+			SHOW_LINE_U32("\t", s->splice_insert.splice_time.time_specified_flag);
+			SHOW_LINE_U64("\t", s->splice_insert.splice_time.pts_time);
+			SHOW_LINE_U32("\t", s->splice_insert.component_count);
 
-		if (s->splice_insert.duration_flag) {
-			SHOW_LINE_U32("\t\t", s->splice_insert.duration.auto_return);
-			SHOW_LINE_U64("\t\t", s->splice_insert.duration.duration);
+			if (s->splice_insert.duration_flag) {
+				SHOW_LINE_U32("\t\t", s->splice_insert.duration.auto_return);
+				SHOW_LINE_U64("\t\t", s->splice_insert.duration.duration);
+			}
+
+			SHOW_LINE_U32("\t", s->splice_insert.unique_program_id);
+			SHOW_LINE_U32("\t", s->splice_insert.avail_num);
+			SHOW_LINE_U32("\t", s->splice_insert.avails_expected);
 		}
-
-		SHOW_LINE_U32("\t", s->splice_insert.unique_program_id);
-		SHOW_LINE_U32("\t", s->splice_insert.avail_num);
-		SHOW_LINE_U32("\t", s->splice_insert.avails_expected);
 
 	}
 
