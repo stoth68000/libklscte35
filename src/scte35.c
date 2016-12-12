@@ -819,6 +819,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	/* TODO: We don't support descriptors */
 	/* We don't support encryption so we dont need alignment stuffing */
 	/* We don't support encrypted_packets so we dont need e_crc_32 */
+	si->e_crc_32 = 0;
 
 	si->section_length = klbs_get_byte_count(bs)
 		+ 4 /* CRC */
@@ -828,9 +829,9 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	bs->buf[2]  =  (si->section_length       & 0xff);
 
 	/* Checksum */
-	unsigned int crc32 = 0;
-	iso13818_getCRC32(klbs_get_buffer(bs), klbs_get_byte_count(bs), &crc32);
-	klbs_write_bits(bs, crc32, 32);
+	si->crc_32 = 0;
+	iso13818_getCRC32(klbs_get_buffer(bs), klbs_get_byte_count(bs), &si->crc_32);
+	klbs_write_bits(bs, si->crc_32, 32);
 	klbs_write_buffer_complete(bs);
 
 	int count = klbs_get_byte_count(bs);
