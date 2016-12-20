@@ -4,8 +4,9 @@ AUTOMAKE_OPTIONS = foreign
 CFLAGS += -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BITS=64 -O3 \
 	-D_BSD_SOURCE \
 	-I$(top_srcdir)/src \
-	-L$(top_builddir)/src/.libs -lklscte35 -lpthread \
-	-DKL_USERSPACE -lz -ldl -lklscte35 -lklvanc
+	-DKL_USERSPACE
+
+LDFLAGS += -L$(top_builddir)/src/.libs -lklscte35 -lpthread -lz -ldl -lklscte35 -lklvanc
 
 if DEBUG
 	CFLAGS += -g
