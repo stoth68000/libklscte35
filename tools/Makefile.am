@@ -6,7 +6,7 @@ CFLAGS += -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_
 	-I$(top_srcdir)/src \
 	-DKL_USERSPACE
 
-LDFLAGS += -L$(top_builddir)/src/.libs -lklscte35 -lpthread -lz -ldl -lklscte35 -lklvanc
+LDFLAGS += -L$(top_builddir)/src/.libs -lpthread -lz -ldl -lklvanc -lklscte35
 
 if DEBUG
 	CFLAGS += -g
