@@ -2,8 +2,6 @@
 
 #include <stdio.h>
 
-#include <libiso13818/iso13818.h>
-
 /* CRC - Section checksumming helpers - common for ATSC/DVB */
 static unsigned int crc32_table[256] =
 {
