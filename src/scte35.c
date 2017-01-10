@@ -52,6 +52,19 @@ static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typ
 	printf("\n");
 }
 
+const char *scte35_description_command_type(uint32_t command_type)
+{
+	switch(command_type) {
+	case SCTE35_COMMAND_TYPE__SPLICE_NULL: return "SPLICE_NULL";
+	case SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE: return "SPLICE_SCHEDULE"; 
+	case SCTE35_COMMAND_TYPE__SPLICE_INSERT: return "SPLICE_INSERT"; 
+	case SCTE35_COMMAND_TYPE__TIME_SIGNAL: return "TIME_SIGNAL"; 
+	case SCTE35_COMMAND_TYPE__BW_RESERVATION: return "BW_RESERVATION"; 
+	case SCTE35_COMMAND_TYPE__PRIVATE: return "PRIVATE_COMMAND"; 
+	default: return "Reserved";
+	}
+}
+
 static void print_wrapper(void *_unused, const char *fmt, ...)
 {
 	char v[strlen(fmt) + 2];
@@ -400,6 +413,7 @@ static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35
 }
 
 #define SHOW_LINE_U32(indent, field) printf("%s%s = 0x%x (%d)\n", indent, #field, field, field);
+#define SHOW_LINE_U32_SUFFIX(indent, field, suffix) printf("%s%s = 0x%x (%d) [%s]\n", indent, #field, field, field, suffix);
 #define SHOW_LINE_U64(indent, field) printf("%s%s = %" PRIu64 "\n", indent, #field, field);
 void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 {
@@ -414,7 +428,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	SHOW_LINE_U32("", s->cw_index);
 	SHOW_LINE_U32("", s->tier);
 	SHOW_LINE_U32("", s->splice_command_length);
-	SHOW_LINE_U32("", s->splice_command_type);
+	SHOW_LINE_U32_SUFFIX("", s->splice_command_type, scte35_description_command_type(s->splice_command_type));
 
 	if (s->splice_command_type == 0x05 /* Insert */) {
 		SHOW_LINE_U32("\t", s->splice_insert.splice_event_id);

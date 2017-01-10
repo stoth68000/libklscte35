@@ -239,6 +239,13 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
 int scte35_create_scte104_message(struct scte35_context_s *ctx,
         struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount);
 
+/**
+ * @brief	Return a human readable label for the command type. Eg. SPLICE_NULL.
+ * @param[in]	uint32_t command_type - A valid command_type code according to the spec.
+ * @return	"Reserved" or a valid description. A valid string is guaranteed to be returned.
+ */
+const char *scte35_description_command_type(uint32_t command_type);
+
 #ifdef __cplusplus
 };
 #endif
