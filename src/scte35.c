@@ -389,29 +389,6 @@ int scte35_set_next_event_id(struct scte35_context_s *ctx, uint32_t eventId)
 	return 0;
 }
 
-static uint8_t *parse_time(struct scte35_splice_time_s *st, uint8_t *p)
-{
-	st->time_specified_flag = *(p + 0) & 0x80 ? 1 : 0;
-	if (st->time_specified_flag == 1) {
-		st->pts_time = ((uint64_t)*(p + 0) << 32 |
-			(uint64_t)*(p + 1) << 24 |
-			(uint64_t)*(p + 2) << 16 |
-			(uint64_t)*(p + 3) << 8 |
-			(uint64_t)*(p + 4)) & 0x1ffffffffL;
-		return p + 5;
-	} else
-		return p + 1;
-}
-
-static uint8_t *parse_component(struct scte35_splice_insert_s *si, struct scte35_splice_component_s *c, uint8_t *p)
-{
-	c->component_tag = *p; p++;
-	if (si->splice_immediate_flag == 0)
-		p = parse_time(&c->splice_time, p);
-
-	return p;
-}
-
 #define SHOW_LINE_U32(indent, field) printf("%s%s = 0x%x (%d)\n", indent, #field, field, field);
 #define SHOW_LINE_U32_SUFFIX(indent, field, suffix) printf("%s%s = 0x%x (%d) [%s]\n", indent, #field, field, field, suffix);
 #define SHOW_LINE_U64(indent, field) printf("%s%s = %" PRIu64 "\n", indent, #field, field);
@@ -459,6 +436,136 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 
 	SHOW_LINE_U32("", s->e_crc_32);
 	SHOW_LINE_U32("", s->crc_32);
+	SHOW_LINE_U32("", s->crc_32_is_valid);
+}
+
+ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si, uint8_t *src, uint32_t srcLengthBytes)
+{
+	if ((!si) || (!src) || (srcLengthBytes == 0))
+		return -1;
+
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_read_set_buffer(bs, src, srcLengthBytes);
+
+	si->table_id = klbs_read_bits(bs, 8);
+	assert(si->table_id == SCTE35_TABLE_ID);
+
+	si->section_syntax_indicator = klbs_read_bits(bs, 1);
+	assert(si->section_syntax_indicator == 0);
+
+	si->private_indicator = klbs_read_bits(bs, 1);
+	assert(si->private_indicator == 0);
+
+	uint32_t v = klbs_read_bits(bs, 2); /* Reserved */
+	assert(v == 0x03);
+
+	//
+	si->section_length = klbs_read_bits(bs, 12);
+
+	si->protocol_version = klbs_read_bits(bs, 8);
+	si->encrypted_packet = klbs_read_bits(bs, 1);
+	si->encryption_algorithm = klbs_read_bits(bs, 6);
+	si->pts_adjustment = klbs_read_bits(bs, 33);
+
+	si->cw_index = klbs_read_bits(bs, 8);
+	si->tier = klbs_read_bits(bs, 12);
+
+	si->splice_command_length = klbs_read_bits(bs, 12);
+	si->splice_command_type = klbs_read_bits(bs, 8);
+
+	int posa = klbs_get_byte_count(bs);
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_NULL) {
+		/* Nothing to do */
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
+		assert(0);
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+
+		struct scte35_splice_insert_s *i = &si->splice_insert;
+
+		i->splice_event_id = klbs_read_bits(bs, 32);
+		i->splice_event_cancel_indicator = klbs_read_bits(bs, 1);
+		klbs_read_bits(bs, 7); /* Reserved */
+
+		if (i->splice_event_cancel_indicator == 0) {
+
+			i->out_of_network_indicator = klbs_read_bits(bs, 1);
+			i->program_splice_flag = klbs_read_bits(bs, 1);
+			i->duration_flag = klbs_read_bits(bs, 1);
+			i->splice_immediate_flag = klbs_read_bits(bs, 1);
+			klbs_read_bits(bs, 4); /* Reserved */
+
+			if ((i->program_splice_flag == 1) && (i->splice_immediate_flag == 0)) {
+				i->splice_time.time_specified_flag = klbs_read_bits(bs, 1);
+				if (i->splice_time.time_specified_flag == 1) {
+					klbs_read_bits(bs, 6); /* Reserved */
+					i->splice_time.pts_time = klbs_read_bits(bs, 33);
+				} else
+					klbs_read_bits(bs, 7); /* Reserved */
+			}
+			if (i->program_splice_flag == 0) {
+				/* TODO: We don't support component counts, write fixed values */
+				klbs_read_bits(bs, 8);
+			}
+			if (i->duration_flag == 1) {
+				i->duration.auto_return = klbs_read_bits(bs, 1);
+				klbs_read_bits(bs, 6); /* Reserved */
+				i->duration.duration = klbs_read_bits(bs, 33);
+			}
+
+			i->unique_program_id = klbs_read_bits(bs, 16);
+			i->avail_num = klbs_read_bits(bs, 8);
+			i->avails_expected = klbs_read_bits(bs, 8);
+		}
+
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		si->time_signal.time_specified_flag = klbs_read_bits(bs, 1);
+		if (si->time_signal.time_specified_flag == 1) {
+			klbs_read_bits(bs, 6); /* Reserved */
+			assert(v == 0x3f);
+			si->time_signal.pts_time = klbs_read_bits(bs, 33);
+		} else {
+			v = klbs_read_bits(bs, 7); /* Reserved */
+			assert(v == 0x7f);
+		}
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
+		/* TODO: Not supported */
+		assert(0);
+	} else
+	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
+		/* TODO: Not supported */
+		assert(0);
+	}
+	int posb = klbs_get_byte_count(bs);
+	si->splice_command_length = posb - posa;
+
+	si->descriptor_loop_length = klbs_read_bits(bs, 16);
+	if (si->descriptor_loop_length) {
+		si->splice_descriptor = malloc(si->descriptor_loop_length);
+		if (!si->splice_descriptor)
+			return -1;
+		for (int i = 0; i < si->descriptor_loop_length; i++) {
+			si->splice_descriptor[i] = klbs_read_bits(bs, 8);
+		}
+	}
+
+	/* We don't support encryption so we dont need alignment stuffing */
+	/* We don't support encrypted_packets so we dont need e_crc_32 */
+	si->e_crc_32 = 0;
+
+	/* Checksum */
+	si->crc_32 = klbs_read_bits(bs, 32);
+	if (iso13818_checkCRC32(klbs_get_buffer(bs), klbs_get_byte_count(bs)) == 0) {
+		/* CRC OK */
+		si->crc_32_is_valid = 1;
+	} else
+		si->crc_32_is_valid = 0;
+
+	klbs_free(bs);
+	return klbs_get_byte_count(bs);
 }
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
@@ -467,91 +574,10 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 		return 0;
 
 	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
-
-	uint8_t *p = section;
-	s->table_id = *(section + 0);
-	s->section_syntax_indicator = *(section + 1) & 0x80 ? 1 : 0;
-	s->private_indicator = *(section + 1) & 0x40 ? 1 : 0;
-        s->section_length = (*(section + 1) << 8 | *(section + 2)) & 0xfff;
-	s->protocol_version = scte35_get_protocol(section);
-	s->encrypted_packet = scte35_is_encrypted(section);
-	s->encryption_algorithm = (*(section + 4) >> 1) & 0x3f;
-	s->pts_adjustment = scte35_get_pts_adjustment(section);
-	s->cw_index = *(section + 8);
-        s->tier = (*(section + 9) << 8 | *(section + 10)) & 0xfff;
-	s->splice_command_length = scte35_get_command_length(section);
-	s->splice_command_type = scte35_get_command_type(section);
-
-	if (s->splice_command_type == 0x00 /* null processing */) {
-	} else
-	if (s->splice_command_type == 0x05 /* insert processing */) {
-		struct scte35_splice_insert_s *si = &s->splice_insert;
-		si->splice_event_id = *(section + 14) << 24 | *(section + 15) << 16 | *(section + 16) << 8 | *(section + 17);
-		si->splice_event_cancel_indicator = *(section + 18) & 0x80 ? 1 : 0;
-		if (si->splice_event_cancel_indicator == 0) {
-			si->out_of_network_indicator = *(section + 19) & 0x80 ? 1 : 0;
-			si->program_splice_flag = *(section + 19) & 0x40 ? 1 : 0;
-			si->duration_flag = *(section + 19) & 0x20 ? 1 : 0;
-			si->splice_immediate_flag = *(section + 19) & 0x10 ? 1 : 0;
-
-			p = section + 20;
-			if ((si->program_splice_flag == 1) && (si->splice_immediate_flag == 0)) {
-				struct scte35_splice_time_s *st = &si->splice_time;
-				p = parse_time(st, p);
-			}
-
-			if (si->program_splice_flag == 0) {
-				/* We don't support Component counts */
-				si->component_count = *p;
-				p++;
-				for (int i = 0; i < si->component_count; i++)
-					p = parse_component(si, &si->components[i], p);
-				
-			}
-
-			if (si->duration_flag == 1) {
-				struct scte35_break_duration_s *d = &si->duration;
-				d->auto_return = *(p + 0) & 0x80 ? 1 : 0;
-				d->duration = ((uint64_t)*(p + 0) << 32 |
-					(uint64_t)*(p + 1) << 24 |
-					(uint64_t)*(p + 2) << 16 |
-					(uint64_t)*(p + 3) << 8 |
-					(uint64_t)*(p + 4)) & 0x1ffffffffL;
-
-				p += 5;
-			}
-
-			si->unique_program_id = *(p + 0) << 8 | *(p + 1); p+= 2;
-			si->avail_num = *p; p++;
-			si->avails_expected = *p; p++;
-			
-		} /* si->splice_event_cancel_indicator == 0 */
-
-	} /* s->splice_command_type == 0x05 */
-	else {
-		/* No support for schedule, time_signal or bandwidth reservervation, or
-		 * private commands.
-		 */
-		scte35_splice_info_section_free(s);
-		return 0;
+	if (scte35_splice_info_section_unpackFrom(s, section, byteCount) < 0) {
+		free(s);
+		return NULL;
 	}
-
-	s->descriptor_loop_length = *(p + 0) << 8 | *(p + 1); p+= 2;
-
-	/* TODO: We don't support descriptor parsing, yet. */
-	for (int i = 0; i < s->descriptor_loop_length; i++) {
-		uint8_t tag = *p; p++;
-		uint8_t len = *p; p++;
-		p += len;
-	}
-
-	/* TODO: Alignment stuff, we've never seen a frame with alignment stuffing */
-
-	if (s->encrypted_packet) {
-		s->e_crc_32 = 0;
-	}
-
-	s->crc_32 = 0;
 
 	return s;
 }
@@ -825,7 +851,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 
 	klbs_write_bits(bs, si->descriptor_loop_length, 16);
 	for (int i = 0; i < si->descriptor_loop_length; i++) {
-		klbs_write_bits(bs, si->descriptors, 8);
+		klbs_write_bits(bs, si->splice_descriptor[i], 8);
 	}
 
 	/* We don't support encryption so we dont need alignment stuffing */

@@ -127,10 +127,11 @@ struct scte35_splice_info_section_s
 
 	/* We don't support descriptor parsing. */
 	uint16_t descriptor_loop_length;
-	uint8_t  *descriptors;
+	uint8_t  *splice_descriptor;
 
 	uint32_t e_crc_32;
 	uint32_t crc_32;
+	uint32_t crc_32_is_valid;
 };
 
 /**
@@ -190,6 +191,9 @@ int scte35_generate_heartbeat(struct scte35_context_s *ctx);
 
 int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes);
+
+ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si,
+	uint8_t *src, uint32_t srcLengthBytes);
 
 /**
  * @brief	Allow the next event ID to be set, so that SCTE104 translated
