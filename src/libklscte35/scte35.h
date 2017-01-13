@@ -127,6 +127,7 @@ struct scte35_splice_info_section_s
 
 	/* We don't support descriptor parsing. */
 	uint16_t descriptor_loop_length;
+	uint8_t  *descriptors;
 
 	uint32_t e_crc_32;
 	uint32_t crc_32;
