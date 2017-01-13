@@ -169,7 +169,7 @@ static __inline__ void klbs_write_byte_stuff(struct klbs_context_s *ctx, uint32_
  * @param[in]   uint32_t bits  data pattern.
  * @param[in]   uint32_t bitcount  number of bits to write
  */
-static __inline__ void klbs_write_bits(struct klbs_context_s *ctx, uint32_t bits, uint32_t bitcount)
+static __inline__ void klbs_write_bits(struct klbs_context_s *ctx, uint64_t bits, uint32_t bitcount)
 {
 	for (int i = (bitcount - 1); i >= 0; i--)
 		klbs_write_bit(ctx, bits >> i);
@@ -212,11 +212,11 @@ static __inline__ uint32_t klbs_read_bit(struct klbs_context_s *ctx)
 }
 
 /**
- * @brief       Read between 1..32 bits from the bitstream.
+ * @brief       Read between 1..64 bits from the bitstream.
  * @param[in]   struct klbs_context_s *ctx  bitstream context
  * @return      uint32_t  bits
  */
-static __inline__ uint32_t klbs_read_bits(struct klbs_context_s *ctx, uint32_t bitcount)
+static __inline__ uint64_t klbs_read_bits(struct klbs_context_s *ctx, uint32_t bitcount)
 {
 	uint32_t bits = 0;
 	for (uint32_t i = 1; i <= bitcount; i++) {
@@ -224,6 +224,20 @@ static __inline__ uint32_t klbs_read_bits(struct klbs_context_s *ctx, uint32_t b
 		bits |= klbs_read_bit(ctx);
 	}
 	return bits;
+}
+
+/**
+ * @brief       Peek between 1..64 bits from the bitstream.
+ *              Each call to peek copies the context, advances it, without changing the
+ *              original context. As a result, consecutive peek calls will always return
+ *              the same content.
+ * @param[in]   struct klbs_context_s *ctx  bitstream context
+ * @return      uint32_t  bits
+ */
+static __inline__ uint64_t klbs_peek_bits(struct klbs_context_s *ctx, uint32_t bitcount)
+{
+	struct klbs_context_s copy = *ctx; /* Implicit struct copy */
+	return klbs_read_bits(&copy, bitcount);
 }
 
 /**
