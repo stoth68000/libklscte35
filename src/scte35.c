@@ -823,13 +823,11 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 	bs->buf[11] |= ((si->splice_command_length >> 8) & 0x0f);
 	bs->buf[12]  =  (si->splice_command_length       & 0xff);
 
-	/* TODO: We don't support descriptors */
 	klbs_write_bits(bs, si->descriptor_loop_length, 16);
 	for (int i = 0; i < si->descriptor_loop_length; i++) {
-		//klbs_write_bits(bs, si->descriptors, 8);
+		klbs_write_bits(bs, si->descriptors, 8);
 	}
 
-	/* TODO: We don't support descriptors */
 	/* We don't support encryption so we dont need alignment stuffing */
 	/* We don't support encrypted_packets so we dont need e_crc_32 */
 	si->e_crc_32 = 0;
