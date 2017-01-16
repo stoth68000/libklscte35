@@ -218,7 +218,7 @@ static __inline__ uint32_t klbs_read_bit(struct klbs_context_s *ctx)
  */
 static __inline__ uint64_t klbs_read_bits(struct klbs_context_s *ctx, uint32_t bitcount)
 {
-	uint32_t bits = 0;
+	uint64_t bits = 0;
 	for (uint32_t i = 1; i <= bitcount; i++) {
 		bits <<= 1;
 		bits |= klbs_read_bit(ctx);
