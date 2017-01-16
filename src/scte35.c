@@ -407,7 +407,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	SHOW_LINE_U32("", s->splice_command_length);
 	SHOW_LINE_U32_SUFFIX("", s->splice_command_type, scte35_description_command_type(s->splice_command_type));
 
-	if (s->splice_command_type == 0x05 /* Insert */) {
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 		SHOW_LINE_U32("\t", s->splice_insert.splice_event_id);
 		SHOW_LINE_U32("\t", s->splice_insert.splice_event_cancel_indicator);
 		if (s->splice_insert.splice_event_cancel_indicator == 0) {
