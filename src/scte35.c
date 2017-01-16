@@ -786,6 +786,7 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
+		/* TODO: Not supported */
 		assert(0);
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
