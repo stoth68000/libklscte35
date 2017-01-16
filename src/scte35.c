@@ -778,13 +778,23 @@ int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
 
 	klbs_write_bits(bs, si->table_id, 8);
 	klbs_write_bits(bs, si->section_syntax_indicator, 1);
+	assert(si->section_syntax_indicator == 0);
+
 	klbs_write_bits(bs, si->private_indicator, 1);
+	assert(si->private_indicator == 0);
+
 	klbs_write_bits(bs, 0xff, 2); /* Reserved */
 	klbs_write_bits(bs, 0, 12); /* Section length, to be filled later */
 
 	klbs_write_bits(bs, si->protocol_version, 8);
+	assert(si->protocol_version == 0);
+
 	klbs_write_bits(bs, si->encrypted_packet, 1);
+	assert(si->encrypted_packet == 0);
+
 	klbs_write_bits(bs, si->encryption_algorithm, 6);
+	assert(si->encryption_algorithm == 0);
+
 	klbs_write_bits(bs, si->pts_adjustment, 33);
 	klbs_write_bits(bs, si->cw_index, 8);
 	klbs_write_bits(bs, si->tier, 12);
