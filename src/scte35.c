@@ -531,7 +531,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
 		si->time_signal.time_specified_flag = klbs_read_bits(bs, 1);
 		if (si->time_signal.time_specified_flag == 1) {
-			klbs_read_bits(bs, 6); /* Reserved */
+			v = klbs_read_bits(bs, 6); /* Reserved */
 			assert(v == 0x3f);
 			si->time_signal.pts_time = klbs_read_bits(bs, 33);
 		} else {
