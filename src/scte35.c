@@ -429,6 +429,14 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 			SHOW_LINE_U32("\t", s->splice_insert.avails_expected);
 		}
 
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		SHOW_LINE_U32("", s->time_signal.time_specified_flag);
+		if (s->time_signal.time_specified_flag == 1)
+			SHOW_LINE_U64("", s->time_signal.pts_time);
+	} else {
+		fprintf(stderr, "No dump support for command type 0x%02x, asserting\n", s->splice_command_type);
+		assert(0);
 	}
 
         /* We don't support descriptor parsing. */
