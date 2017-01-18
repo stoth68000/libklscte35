@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Kernel Labs Inc. All Rights Reserved
+ * Copyright (c) 2016-2017 Kernel Labs Inc. All Rights Reserved
  *
  * Address: Kernel Labs Inc., PO Box 745, St James, NY. 11780
  * Contact: sales@kernellabs.com
@@ -22,8 +22,8 @@
 /**
  * @file	scte35.h
  * @author	Steven Toth <stoth@kernellabs.com>
- * @copyright	Copyright (c) 2016 Kernel Labs Inc. All Rights Reserved.
- * @brief	TODO - Brief description goes here.
+ * @copyright	Copyright (c) 2016-2017 Kernel Labs Inc. All Rights Reserved.
+ * @brief	Pack, unpack DVB SCTE35 table sections. Helper functions to create common table types.
  */
 
 #ifndef SCTE35_H
@@ -41,6 +41,8 @@ extern "C" {
 #define SCTE35_COMMAND_TYPE__TIME_SIGNAL	0x06
 #define SCTE35_COMMAND_TYPE__BW_RESERVATION	0x07
 #define SCTE35_COMMAND_TYPE__PRIVATE		0xff
+
+#define SCTE35_TABLE_ID 0xFC
 
 /**
  * @brief	TODO - Brief description goes here.
@@ -135,80 +137,70 @@ struct scte35_splice_info_section_s
 };
 
 /**
- * @brief       TODO - Brief description goes here.
- */
-struct scte35_context_s
-{
-	/* User visible fields */
-	uint8_t  pkt[188]; /* Assumption, sections always < this array size */
-	uint8_t  section[4096];
-	uint16_t section_length;
-
-	/* Private content, caller should not modify or inspect. */
-	int      verbose;
-	uint16_t outputPid;
-	uint8_t  cc;
-	uint32_t eventId;
-	uint16_t uniqueProgramId;
-};
-
-/**
- * @brief	TODO - Brief description goes here.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
- * @param[in]	uint16_t outputPid - Brief description goes here.
- */
-void scte35_initialize(struct scte35_context_s *ctx, uint16_t outputPid);
-
-/**
  * @brief	Go into Ad, switch away from the network.
- *		Return the number of TS packets generated in ctx->pkt.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
+ *		Create a buffer dst containing the DVB section table, and return it to caller. Caller must free after use.
  * @param[in]	uint16_t uniqueProgramId - Brief description goes here.
+ * @param[in]	uint32_t eventId - Brief description goes here.
+ * @param[out]	uint8_t **dst - New allocation contacting the SCTE35 constructed section.
+ * @param[out]	uint32_t **dstLengthBytes - Number of bytes at dst
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_generate_immediate_out_of_network(struct scte35_context_s *ctx, uint16_t uniqueProgramId);
+int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
+        uint8_t **dst, uint32_t *dstLengthBytes);
+
+/**
+ * @brief	Go into Ad, switch away from the network for a period of time.
+ *		Create a buffer dst containing the DVB section table, and return it to caller. Caller must free after use.
+ * @param[in]	uint16_t uniqueProgramId - Brief description goes here.
+ * @param[in]	uint32_t eventId - Brief description goes here.
+ * @param[in]	uint32_t duration - in 1/100ths of seconds.
+ * @param[in]	int autoReturn - Automatically return to network after break?
+ * @param[out]	uint8_t **dst - New allocation contacting the SCTE35 constructed section.
+ * @param[out]	uint32_t **dstLengthBytes - Number of bytes at dst
+ * @return	0 - Success
+ * @return	< 0 - Error
+ */
+int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
+        uint8_t **dst, uint32_t *dstLengthBytes);
 
 /**
  * @brief	Go out of Ad break, return back to the network.
- *		Return the number of TS packets generated in ctx->pkt.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
+ *		Create a buffer dst containing the DVB section table, and return it to caller. Caller must free after use.
  * @param[in]	uint16_t uniqueProgramId - Brief description goes here.
+ * @param[in]	uint32_t eventId - Brief description goes here.
+ * @param[out]	uint8_t **dst - New allocation contacting the SCTE35 constructed section.
+ * @param[out]	uint32_t **dstLengthBytes - Number of bytes at dst
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_generate_immediate_in_to_network(struct scte35_context_s *ctx, uint16_t uniqueProgramId);
+int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t eventId,
+        uint8_t **dst, uint32_t *dstLengthBytes);
 
 /**
- * @brief	Generate a splice_null() heartbeat packet. This typically keeps the
- *		downstream slicer alive, not specifically in the spec.
- *		Return the number of TS packets generated in ctx->pkt.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
+ * @brief	Serialize object si out to buffer as a scte35 table section.
+ * @param[in]	struct scte35_splice_info_section_s *si - object.
+ * @param[in]	uint8_t *buffer - Destination.
+ * @param[out]	uint32_t buffer_length_bytes - Maximum size of buffer
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_generate_heartbeat(struct scte35_context_s *ctx);
+int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes);
 
-int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
-	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes);
-
+/**
+ * @brief	Read buffer and de-serialize out to struct si.
+ * @param[in]	struct scte35_splice_info_section_s *si - object.
+ * @param[in]	uint8_t *src - Source of a scte35 table section..
+ * @param[out]	uint32_t srcLengthBytes - Maximum size of buffer
+ * @return	0 - Success
+ * @return	< 0 - Error
+ */
 ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si,
 	uint8_t *src, uint32_t srcLengthBytes);
 
 /**
- * @brief	Allow the next event ID to be set, so that SCTE104 translated
- *		packets, that contain their own eventID, we will to honor.
- *		Return the number of TS packets generated in ctx->pkt.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
- * @param[in]	uint32_t eventId - Brief description goes here.
- * @return	0 - Success
- * @return	< 0 - Error
- */
-int scte35_set_next_event_id(struct scte35_context_s *ctx, uint32_t eventId);
-
-/* Caller must call scte35_splice_info_section_free() after they're done with the parse result. */
-/**
  * @brief	TODO - Brief description goes here.
+ *              Caller must call scte35_splice_info_section_free() after they're done with the parse result.
  * @param[in]	uint8_t *section - Brief description goes here.
  * @param[in]	unsigned int byteCount - Brief description goes here.
  */
@@ -234,15 +226,13 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
 
 /**
  * @brief	Convert SCTE35 to SCTE104.
- * @param[in]	struct scte35_context_s *ctx - Brief description goes here.
  * @param[in]	struct scte35_splice_info_section_s *s - Brief description goes here.
  * @param[in]	uint8_t **buf - Brief description goes here.
  * @param[in]	uint16_t *byteCount - Brief description goes here.
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_create_scte104_message(struct scte35_context_s *ctx,
-        struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount);
+int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount);
 
 /**
  * @brief	Return a human readable label for the command type. Eg. SPLICE_NULL.

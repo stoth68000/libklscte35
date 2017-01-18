@@ -29,13 +29,6 @@
 #include <errno.h>
 #include <stdarg.h>
 
-#include <bitstream/mpeg/ts.h>
-#include <bitstream/mpeg/psi.h>
-#include <bitstream/dvb/si.h>
-#include <bitstream/dvb/si_print.h>
-#include <bitstream/scte/35.h>
-#include <bitstream/scte/35_print.h>
-
 #include <libklscte35/scte35.h>
 #include "klbitstream_readwriter.h"
 #include "crc32.h"
@@ -44,13 +37,15 @@
 do {\
   if (ctx->verbose >= level) printf(fmt, ## arg); \
 } while(0);
- 
+
+#if 0 
 static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typically 16 */)
 {
 	for (unsigned int i = 0; i < len; i++)
 		printf("%02x%s", buf[i], ((i + 1) % bytesPerRow) ? " " : "\n");
 	printf("\n");
 }
+#endif
 
 const char *scte35_description_command_type(uint32_t command_type)
 {
@@ -65,327 +60,105 @@ const char *scte35_description_command_type(uint32_t command_type)
 	}
 }
 
-static void print_wrapper(void *_unused, const char *fmt, ...)
+int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
+	uint8_t **dst, uint32_t *dstLengthBytes)
 {
-	char v[strlen(fmt) + 2];
-	va_list args;
-	va_start(args, fmt);
-	strcpy(v, fmt);
-	strcat(v, "\n");
-	vprintf(v, args);
-	va_end(args);
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	si->splice_insert.splice_event_id = eventId;
+	si->splice_insert.splice_event_cancel_indicator = 0;
+	si->splice_insert.out_of_network_indicator = 1;
+	si->splice_insert.program_splice_flag = 1;
+	si->splice_insert.duration_flag = 1;
+	si->splice_insert.duration.auto_return = autoReturn;
+	si->splice_insert.duration.duration = duration;
+	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.unique_program_id = uniqueProgramId;
+	si->splice_insert.avail_num = 0; /* Not supported */
+	si->splice_insert.avails_expected = 0; /* Not supported */
+
+	int l = 4096;
+	uint8_t *buf = calloc(1, l);
+	if (!buf)
+		return -1;
+
+	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
+	if (packedLength < 0) {
+		free(buf);
+		scte35_splice_info_section_free(si);
+		return -1;
+	}
+
+	*dst = buf;
+	*dstLengthBytes = packedLength;
+	scte35_splice_info_section_free(si);
+
+	return 0;
 }
 
-/* Return the number of TS packets we've generated */
-static int output_psi_section(struct scte35_context_s *ctx, uint8_t *section, uint16_t pid, uint8_t *cc)
+/* Go into Ad, switch away from the network */
+int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
+	uint8_t **dst, uint32_t *dstLengthBytes)
 {
-	uint16_t section_length = psi_get_length(section) + PSI_HEADER_SIZE;
-	uint16_t section_offset = 0;
-	int count = 0;
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	si->splice_insert.splice_event_id = eventId;
+	si->splice_insert.splice_event_cancel_indicator = 0;
+	si->splice_insert.out_of_network_indicator = 1;
+	si->splice_insert.program_splice_flag = 1;
+	si->splice_insert.duration_flag = 0;
+	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.unique_program_id = uniqueProgramId;
+	si->splice_insert.avail_num = 0; /* Not supported */
+	si->splice_insert.avails_expected = 0; /* Not supported */
 
-	memcpy(&ctx->section[0], section, section_length);
-	ctx->section_length = section_length;
+	int l = 4096;
+	uint8_t *buf = calloc(1, l);
+	if (!buf)
+		return -1;
 
-	do {
-		uint8_t ts_offset = 0;
-		memset(ctx->pkt, 0xff, TS_SIZE);
+	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
+	if (packedLength < 0) {
+		free(buf);
+		scte35_splice_info_section_free(si);
+		return -1;
+	}
 
-		psi_split_section(ctx->pkt, &ts_offset, section, &section_offset);
+	*dst = buf;
+	*dstLengthBytes = packedLength;
+	scte35_splice_info_section_free(si);
 
-		ts_set_pid(ctx->pkt, pid);
-		ts_set_cc(ctx->pkt, *cc);
-		(*cc)++;
-		*cc &= 0xf;
-
-		if (section_offset == section_length)
-			psi_split_end(ctx->pkt, &ts_offset);
-
-		count++;
-		if (ctx->verbose >= 2) {
-			hexdump(ctx->pkt, TS_SIZE, 16);
-			scte35_print(section, print_wrapper, NULL, PRINT_XML);
- 		}
-
-	} while (section_offset < section_length);
-	return count;
+	return 0;
 }
 
-int scte35_generate_heartbeat(struct scte35_context_s *ctx)
+int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t eventId,
+	uint8_t **dst, uint32_t *dstLengthBytes)
 {
-	uint8_t *scte35 = psi_allocate();
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	si->splice_insert.splice_event_id = eventId;
+	si->splice_insert.splice_event_cancel_indicator = 0;
+	si->splice_insert.out_of_network_indicator = 0;
+	si->splice_insert.program_splice_flag = 1;
+	si->splice_insert.duration_flag = 0;
+	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.unique_program_id = uniqueProgramId;
+	si->splice_insert.avail_num = 0; /* Not supported */
+	si->splice_insert.avails_expected = 0; /* Not supported */
 
-/*
-47 41 23 10 00
-fc          table id
-30 11       SSI / Sec Length
-00          protocol version
-00          encrypted packet / enc algo / pts 32:32
-00 00 00 00 pts 31:0
-00          cw_index
-ff f        tier
- 0 00       splice command length
-00          splice command type (0 = NULL)
-00 00       descriptor look length
-7a 4f bf ff crc32
-ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff 
-*/
-	/* Generate empty section */
-	scte35_init(scte35);
-	psi_set_length(scte35, PSI_MAX_SIZE);
-	scte35_set_pts_adjustment(scte35, 0);
-	scte35_null_init(scte35);
-	scte35_set_desclength(scte35, 0);
-	psi_set_length(scte35, scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE);
-	psi_set_crc(scte35);
-	int count = output_psi_section(ctx, scte35, ctx->outputPid, &ctx->cc);
+	int l = 4096;
+	uint8_t *buf = calloc(1, l);
+	if (!buf)
+		return -1;
 
-	free(scte35);
-	return count;
-}
+	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
+	if (packedLength < 0) {
+		free(buf);
+		scte35_splice_info_section_free(si);
+		return -1;
+	}
 
-#if 0
-static void scte35_generate_pointinout(struct scte35_context_s *ctx, int out_of_network_indicator)
-{
-	uint8_t *scte35 = psi_allocate();
+	*dst = buf;
+	*dstLengthBytes = packedLength;
+	scte35_splice_info_section_free(si);
 
-/*
-47 41 23 11 00
-fc          table id
-30 25       SSI / Section length
-00          protocol version
-00          encrypted packet / enc algo / pts 32:32
-00 00 00 00 pts 31:0
-00          cw_index
-ff f        tier
- 0 14       splice command length
-05          splice command type (5 = splice insert)
-            00 00 10 92   event id
-            7f            splice event cancel indicator
-            ef            out of network indicator / program splice / duration flag
-            fe
-10 17 df 80 fe
-            01 9b fc c0
-            09 78
-            00            aval_num
-            00            avails_expected
-00 00       descriptor loop length
-e9 7f f3 c0 crc32
-ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff 
-*/
-
-	/* Generate insert section */
-	scte35_init(scte35);
-	psi_set_length(scte35, PSI_MAX_SIZE);
-	scte35_set_pts_adjustment(scte35, 0);
-	scte35_insert_init(scte35,
-			   SCTE35_INSERT_HEADER2_SIZE +
-			   SCTE35_SPLICE_TIME_HEADER_SIZE +
-			   SCTE35_SPLICE_TIME_TIME_SIZE +
-			   SCTE35_BREAK_DURATION_HEADER_SIZE +
-			   SCTE35_INSERT_FOOTER_SIZE);
-	scte35_insert_set_cancel(scte35, false);
-	scte35_insert_set_event_id(scte35, 4242);
-	scte35_insert_set_out_of_network(scte35, true);
-	scte35_insert_set_program_splice(scte35, true);
-	scte35_insert_set_duration(scte35, true);
-	scte35_insert_set_splice_immediate(scte35, false);
-
-	uint8_t *splice_time = scte35_insert_get_splice_time(scte35);
-	scte35_splice_time_init(splice_time);
-	scte35_splice_time_set_time_specified(splice_time, true);
-	scte35_splice_time_set_pts_time(splice_time, 270000000);
-
-	uint8_t *duration = scte35_insert_get_break_duration(scte35);
-	scte35_break_duration_init(duration);
-	scte35_break_duration_set_auto_return(duration, true);
-	scte35_break_duration_set_duration(duration, 27000000);
-
-	scte35_insert_set_unique_program_id(scte35, 2424);
-	scte35_insert_set_avail_num(scte35, 0);
-	scte35_insert_set_avails_expected(scte35, 0);
-	scte35_set_desclength(scte35, 0);
-	psi_set_length(scte35, scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE);
-	psi_set_crc(scte35);
-	output_psi_section(scte35, ctx->outputPid, &ctx->cc);
-
-	free(scte35);
-}
-#else
-static int scte35_generate_pointinout(struct scte35_context_s *ctx, int out_of_network_indicator)
-{
-	uint8_t *scte35 = psi_allocate();
-
-/*
-47 41 23 10 00   out of network
-fc
-30 25
-00            protocol version
-00 00 00 00 00
-00            cw_index
-ff f          tier
- 0 14         slice command length
-05            slice command type 5 (insert)
-00 00 00 01   eventid
-7f            cancel prior = false
-df            out of network | program splice | splice_immediate
-00 01         uniq program id 
-00            avail_num
-00            avails_expected
-00 00         desc loop length
-00
-00 00 00 00 00 00 00 00 00
-6b 97 98 28   crc32
-ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff 
-
-47 41 23 11 00   back into network
-fc
-30 25
-00
-00 00 00 00
-00 00       cw_index
-ff f
- 0 14
-05
-00 00 00 02 event id
-7f          cancel prior = false
-5f 00 01 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 b7 68 65 22 ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff 
-*/
-
-/*
-47 41 23 11 00
-fc          table id
-30 25       SSI / Section length
-00          protocol version
-00          encrypted packet / enc algo / pts 32:32
-00 00 00 00 pts 31:0
-00          cw_index
-ff f        tier
- 0 14       splice command length
-05          splice command type (5 = splice insert)
-            00 00 10 92   event id
-            7f            splice event cancel indicator
-            ef            out of network indicator / program splice / duration flag
-            fe
-10 17 df 80 fe
-            01 9b fc c0
-            09 78
-            00            aval_num
-            00            avails_expected
-00 00       descriptor loop length
-e9 7f f3 c0 crc32
-ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
-ff ff ff ff ff ff ff ff ff ff ff ff 
-*/
-
-	/* Generate insert section */
-	scte35_init(scte35);
-	psi_set_length(scte35, PSI_MAX_SIZE);
-	scte35_set_pts_adjustment(scte35, 0);
-	scte35_insert_init(scte35, SCTE35_INSERT_HEADER2_SIZE + SCTE35_INSERT_FOOTER_SIZE);
-	scte35_insert_set_cancel(scte35, false);
-	scte35_insert_set_event_id(scte35, ctx->eventId++);
-	scte35_insert_set_out_of_network(scte35, out_of_network_indicator);
-
-	/* Slice the entire program, audio, video, everything */
-	scte35_insert_set_program_splice(scte35, true);
-	scte35_insert_set_duration(scte35, false);
-	scte35_insert_set_splice_immediate(scte35, true);
-
-	/* See SCTE 118-2 - for Unique Program Number */
-	scte35_insert_set_unique_program_id(scte35, ctx->uniqueProgramId);
-	scte35_insert_set_avail_num(scte35, 0);
-	scte35_insert_set_avails_expected(scte35, 0);
-	scte35_set_desclength(scte35, 0);
-	psi_set_length(scte35, scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE);
-	psi_set_crc(scte35);
-	int count = output_psi_section(ctx, scte35, ctx->outputPid, &ctx->cc);
-
-	free(scte35);
-	return count;
-}
-#endif
-
-void scte35_initialize(struct scte35_context_s *ctx, uint16_t outputPid)
-{
-	dprintf(1, "%s()\n", __func__);
-/* TODO: What is this and why do we need it? */
-static int count = 0;
-	if (count++ > 0)
-		return;
-
-	memset(ctx, 0, sizeof(*ctx));
-	ctx->verbose = 2;
-	ctx->outputPid = outputPid;
-	ctx->eventId = 1;
-	ctx->uniqueProgramId = 1;
-}
-
-	/* Go into Ad, switch away from the network */
-int scte35_generate_immediate_out_of_network(struct scte35_context_s *ctx, uint16_t uniqueProgramId)
-{
-	dprintf(1, "%s()\n", __func__);
-	ctx->uniqueProgramId = uniqueProgramId;
-	return scte35_generate_pointinout(ctx, 1);
-}
-
-int scte35_generate_immediate_in_to_network(struct scte35_context_s *ctx, uint16_t uniqueProgramId)
-{
-	dprintf(1, "%s()\n", __func__);
-	/* Go to network, switch away from the ad slicer */
-	ctx->uniqueProgramId = uniqueProgramId;
-	return scte35_generate_pointinout(ctx, 0);
-}
-
-int scte35_set_next_event_id(struct scte35_context_s *ctx, uint32_t eventId)
-{
-	dprintf(1, "%s(%d)\n", __func__, eventId);
-	ctx->eventId = eventId;
 	return 0;
 }
 
@@ -707,8 +480,7 @@ static int scte104_generate_immediate_in_to_network(const struct scte35_splice_i
 	return 0;
 }
 
-int scte35_create_scte104_message(struct scte35_context_s *ctx,
-	struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount)
+int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount)
 {
 	int ret = -1;
 
@@ -767,10 +539,9 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 	return si;
 }
 
-int scte35_splice_info_section_packTo(struct scte35_context_s *ctx,
-	struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
+int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
 {
-	if ((!ctx) || (!si) || (!buffer) || (buffer_length_bytes < 128))
+	if ((!si) || (!buffer) || (buffer_length_bytes < 128))
 		return -1;
 
 	struct klbs_context_s *bs = klbs_alloc();

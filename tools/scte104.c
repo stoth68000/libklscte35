@@ -60,7 +60,7 @@ static uint8_t mouse_btn[] = {
 	0x17, 0xd8, 0x2e 
 };
 
-static int parse(struct scte35_context_s *scte35, uint8_t *sec, int byteCount)
+static int parse(uint8_t *sec, int byteCount)
 {
 	printf("\nParsing a new SCTE35 section......\n");
 	struct scte35_splice_info_section_s *s = scte35_splice_info_section_parse(sec, byteCount);
@@ -72,7 +72,7 @@ static int parse(struct scte35_context_s *scte35, uint8_t *sec, int byteCount)
 		/* Optionally, Convert the SCTE35 message into a SCTE104 command */
 		uint8_t *buf;
 		uint16_t byteCount;
-		int ret = scte35_create_scte104_message(scte35, s, &buf, &byteCount);
+		int ret = scte35_create_scte104_message(s, &buf, &byteCount);
 		if (ret == 0) {
 			printf("SCTE104 formatted message : ");
 			hexdump(buf, byteCount, 32);
@@ -112,12 +112,8 @@ static int parse(struct scte35_context_s *scte35, uint8_t *sec, int byteCount)
 
 int scte104_main(int argc, char *argv[])
 {
-	struct scte35_context_s s35, *scte35;
-	scte35 = &s35;
-        scte35_initialize(scte35, 0x0123);
-
-	parse(scte35, &mouse_oon[0], sizeof(mouse_oon));
-	parse(scte35, &mouse_btn[0], sizeof(mouse_btn));
+	parse(&mouse_oon[0], sizeof(mouse_oon));
+	parse(&mouse_btn[0], sizeof(mouse_btn));
 
 	printf("program complete.\n");
 	return 0;

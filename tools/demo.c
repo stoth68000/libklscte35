@@ -33,22 +33,17 @@ static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typ
 
 int demo_main(int argc, char *argv[])
 {
-	struct scte35_context_s s35, *scte35;
-	scte35 = &s35;
-
-	scte35_initialize(scte35, 0x0123);
-
 	/* Generate a OUT_OF_NETWORK IMMEDIATE section */
-	printf("Generating out of network table section\n");
-	scte35_set_next_event_id(scte35, 1);
-	scte35_generate_immediate_out_of_network(scte35, 0x1000);
-	hexdump(scte35->section, scte35->section_length, 32);
+	printf("Generating out of network table section, event 1000, program 2000\n");
+	uint8_t *section = 0;
+	uint32_t sectionLengthBytes;
+	scte35_generate_immediate_out_of_network(0x1000, 0x2000, &section, &sectionLengthBytes);
+	hexdump(section, sectionLengthBytes, 32);
 
 	/* Generate a return IN_TO_NETWORK IMMEDIATE section */
-	printf("Generating back to network table section\n");
-	scte35_set_next_event_id(scte35, 1);
-	scte35_generate_immediate_in_to_network(scte35, 0x1000);
-	hexdump(scte35->section, scte35->section_length, 32);
+	printf("Generating back to network table section, event 1001, program 2000\n");
+	scte35_generate_immediate_in_to_network(0x1001, 0x2000, &section, &sectionLengthBytes);
+	hexdump(section, sectionLengthBytes, 32);
 
 	printf("program complete.\n");
 	return 0;
