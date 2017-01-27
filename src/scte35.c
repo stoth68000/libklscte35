@@ -412,9 +412,15 @@ static int scte104_generate_immediate_out_of_network(const struct scte35_splice_
 	*(p++) = 0x00;			/* pre_roll_time */
 	*(p++) = 0x00;			/* ... */
 
-	*(p++) = 0x01;			/* break_duration in 1/10 secs (30) */
-	*(p++) = 0x2c;			/* ... */
-
+	if (si->duration_flag) {
+		uint64_t duration = si->duration.duration / 9000;
+		*(p++) = (duration >> 8) && 0xff;	/* break_duration in 1/10 secs (30) */
+		*(p++) = duration & 0xff;		/* ... */
+	} else {
+		*(p++) = 0x00;
+		*(p++) = 0x00;
+	}
+    
 	*(p++) = si->avail_num;		/* avail_num */
 	*(p++) = si->avails_expected;	/* avails_expected */
 	*(p++) = 0x01;			/* auto_return_flag */
