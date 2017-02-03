@@ -229,10 +229,12 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
  * @param[in]	struct scte35_splice_info_section_s *s - Brief description goes here.
  * @param[in]	uint8_t **buf - Brief description goes here.
  * @param[in]	uint16_t *byteCount - Brief description goes here.
+ * @param[in]	uint64_t pts - Current PTS of SCTE-35 splice (used for SCTE-104 pre-roll calculation)
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount);
+int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf,
+				  uint16_t *byteCount, uint64_t pts);
 
 /**
  * @brief	Return a human readable label for the command type. Eg. SPLICE_NULL.

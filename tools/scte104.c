@@ -72,7 +72,7 @@ static int parse(uint8_t *sec, int byteCount)
 		/* Optionally, Convert the SCTE35 message into a SCTE104 command */
 		uint8_t *buf;
 		uint16_t byteCount;
-		int ret = scte35_create_scte104_message(s, &buf, &byteCount);
+		int ret = scte35_create_scte104_message(s, &buf, &byteCount, 0);
 		if (ret == 0) {
 			printf("SCTE104 formatted message : ");
 			hexdump(buf, byteCount, 32);
