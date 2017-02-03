@@ -368,71 +368,42 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 	free(s);
 }
 
-static int scte104_generate_immediate_out_of_network(const struct scte35_splice_insert_s *si,
-	uint8_t **buf, uint16_t *byteCount)
+#define SPLICE_INSERT_START_NORMAL    0x01
+#define SPLICE_INSERT_START_IMMEDIATE 0x02
+#define SPLICE_INSERT_END_NORMAL      0x03
+#define SPLICE_INSERT_END_IMMEDIATE   0x04
+#define SPLICE_INSERT_CANCEL          0x05
+
+static int scte104_generate_splice_insert(const struct scte35_splice_insert_s *si,
+					  uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
-	uint8_t *b = calloc(1, 32);
-	uint8_t *p = b;
+	uint8_t splice_insert_type;
+	uint32_t preroll = 0;
+	uint64_t duration = 0;
+	uint8_t auto_return = 0;
 
-	/* single_message_operation() */
-	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
-
-	*(p++) = 0x00;			/* opID - init_request_data() */
-	*(p++) = 0x01;			/* ... */
-
-	*(p++) = 0x00;			/* messageSize (entire size excluding Payload Desc) */
-	*(p++) = 0x1b;			/* ... */
-
-	*(p++) = 0xff;			/* result */
-	*(p++) = 0xff;			/* ... */
-
-	*(p++) = 0xff;			/* result_expansion */
-	*(p++) = 0xff;			/* ... */
-
-	*(p++) = 0x00;			/* protocol_version */
-	*(p++) = 0x00;			/* AS_index */
-	*(p++) = 0x00;			/* message_number */
-
-	*(p++) = 0x00;			/* DPI_PID_index */
-	*(p++) = 0x00;			/* ... */
-
-	/* splice_request_data() */
-	*(p++) = 0x02;			/* spliceStart_immediate */
-
-	/* splice_event_index */
-	*(p++) = si->splice_event_id >> 24;
-	*(p++) = si->splice_event_id >> 16;
-	*(p++) = si->splice_event_id >>  4;
-	*(p++) = si->splice_event_id;
-
-	/* unique_program_id */
-	*(p++) = si->unique_program_id >> 8;
-	*(p++) = si->unique_program_id;
-
-	*(p++) = 0x00;			/* pre_roll_time */
-	*(p++) = 0x00;			/* ... */
-
-	if (si->duration_flag) {
-		uint64_t duration = si->duration.duration / 9000;
-		*(p++) = (duration >> 8) && 0xff;	/* break_duration in 1/10 secs (30) */
-		*(p++) = duration & 0xff;		/* ... */
+	if (si->splice_event_cancel_indicator == 1) {
+		splice_insert_type = SPLICE_INSERT_CANCEL;
+	} else if (si->out_of_network_indicator == 1) {
+		/* Out of Network */
+		duration = si->duration.duration / 9000;
+		auto_return = si->duration.auto_return;
+		if (si->splice_immediate_flag == 1) {
+			splice_insert_type = SPLICE_INSERT_START_IMMEDIATE;
+		} else {
+			splice_insert_type = SPLICE_INSERT_START_NORMAL;
+			preroll = (si->splice_time.pts_time - pts) / 90;
+		}
 	} else {
-		*(p++) = 0x00;
-		*(p++) = 0x00;
+		/* Into Network */
+		if (si->splice_immediate_flag == 1) {
+			splice_insert_type = SPLICE_INSERT_END_IMMEDIATE;
+		} else {
+			splice_insert_type = SPLICE_INSERT_END_NORMAL;
+			preroll = (si->splice_time.pts_time - pts) / 90;
+		}
 	}
-    
-	*(p++) = si->avail_num;		/* avail_num */
-	*(p++) = si->avails_expected;	/* avails_expected */
-	*(p++) = 0x01;			/* auto_return_flag */
 
-	*buf = b;
-	*byteCount = (p - b);
-	return 0;
-}
-
-static int scte104_generate_immediate_in_to_network(const struct scte35_splice_insert_s *si,
-	uint8_t **buf, uint16_t *byteCount)
-{
 	uint8_t *b = calloc(1, 32);
 	uint8_t *p = b;
 
@@ -459,65 +430,7 @@ static int scte104_generate_immediate_in_to_network(const struct scte35_splice_i
 	*(p++) = 0x00;			/* ... */
 
 	/* splice_request_data() */
-	*(p++) = 0x04;			/* spliceEnd_immediate */
-
-	/* splice_event_index */
-	*(p++) = si->splice_event_id >> 24;
-	*(p++) = si->splice_event_id >> 16;
-	*(p++) = si->splice_event_id >>  4;
-	*(p++) = si->splice_event_id;
-
-	/* unique_program_id */
-	*(p++) = si->unique_program_id >> 8;
-	*(p++) = si->unique_program_id;
-
-	*(p++) = 0x00;			/* pre_roll_time */
-	*(p++) = 0x00;			/* ... */
-
-	*(p++) = 0x00;			/* break_duration in 1/10 secs (30) */
-	*(p++) = 0x00;			/* ... */
-
-	*(p++) = si->avail_num;		/* avail_num */
-	*(p++) = si->avails_expected;	/* avails_expected */
-	*(p++) = 0x01;			/* auto_return_flag */
-
-	*buf = b;
-	*byteCount = (p - b);
-	return 0;
-}
-
-static int scte104_generate_normal_out_of_network(const struct scte35_splice_insert_s *si,
-                                                  uint8_t **buf, uint16_t *byteCount, uint64_t pts)
-{
-	uint8_t *b = calloc(1, 32);
-	uint8_t *p = b;
-
-	uint32_t preroll = (si->splice_time.pts_time - pts) / 90;
-
-	/* single_message_operation() */
-	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
-
-	*(p++) = 0x00;			/* opID - init_request_data() */
-	*(p++) = 0x01;			/* ... */
-
-	*(p++) = 0x00;			/* messageSize (entire size excluding Payload desc) */
-	*(p++) = 0x1b;			/* ... */
-
-	*(p++) = 0xff;			/* result */
-	*(p++) = 0xff;			/* ... */
-
-	*(p++) = 0xff;			/* result_expansion */
-	*(p++) = 0xff;			/* ... */
-
-	*(p++) = 0x00;			/* protocol_version */
-	*(p++) = 0x00;			/* AS_index */
-	*(p++) = 0x00;			/* message_number */
-
-	*(p++) = 0x00;			/* DPI_PID_index */
-	*(p++) = 0x00;			/* ... */
-
-	/* splice_request_data() */
-	*(p++) = 0x01;			/* spliceStart_normal */
+	*(p++) = splice_insert_type;
 
 	/* splice_event_index */
 	*(p++) = si->splice_event_id >> 24;
@@ -534,8 +447,7 @@ static int scte104_generate_normal_out_of_network(const struct scte35_splice_ins
 	*(p++) = preroll;
 
 	if (si->duration_flag) {
-		uint64_t duration = si->duration.duration / 9000;
-		*(p++) = duration >> 8;	/* break_duration in 1/10 secs (30) */
+		*(p++) = duration >> 8;	/* break_duration in 1/10 secs */
 		*(p++) = duration;
 	} else {
 		*(p++) = 0x00;
@@ -544,12 +456,14 @@ static int scte104_generate_normal_out_of_network(const struct scte35_splice_ins
 
 	*(p++) = si->avail_num;		/* avail_num */
 	*(p++) = si->avails_expected;	/* avails_expected */
-	*(p++) = 0x01;			/* auto_return_flag */
+	*(p++) = auto_return;		/* auto_return_flag */
 
 	*buf = b;
 	*byteCount = (p - b);
 	return 0;
 }
+
+
 
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
@@ -559,32 +473,12 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	 * Only 'insert' messages, no other message support. Return an error if we're not sure
 	 * what kind of message is being requested.
 	 */
-	if (s->splice_command_type != 0x05 /* Insert */)
+	if (s->splice_command_type != SCTE35_COMMAND_TYPE__SPLICE_INSERT)
 		return -1;
 
 	struct scte35_splice_insert_s *si = &s->splice_insert;
 
-	if (si->splice_event_cancel_indicator) {
-		/* TODO: Create a SCTE104 cancel event */
-		return -1;
-	}
-
-	if (si->splice_event_cancel_indicator == 0) {
-		if (si->splice_immediate_flag == 1) {
-			if (si->out_of_network_indicator == 1)
-				ret = scte104_generate_immediate_out_of_network(si, buf, byteCount);
-			else
-				ret = scte104_generate_immediate_in_to_network(si, buf, byteCount);
-		} else {
-			if (si->out_of_network_indicator == 1) {
-				ret = scte104_generate_normal_out_of_network(si, buf, byteCount, pts);
-			} else {
-				fprintf(stderr, "%s() we won't support in events that are not immediate\n",
-					__func__);
-				return -1;
-			}
-		}
-	}
+	ret = scte104_generate_splice_insert(si, buf, byteCount, pts);
 
 	return ret;
 }
