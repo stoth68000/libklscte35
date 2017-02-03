@@ -375,12 +375,12 @@ static int scte104_generate_immediate_out_of_network(const struct scte35_splice_
 	uint8_t *p = b;
 
 	/* single_message_operation() */
-	*(p++) = 0x08;			/* Version */
+	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
 
 	*(p++) = 0x00;			/* opID - init_request_data() */
 	*(p++) = 0x01;			/* ... */
 
-	*(p++) = 0x00;			/* messageSize (entire size excluding Version) */
+	*(p++) = 0x00;			/* messageSize (entire size excluding Payload Desc) */
 	*(p++) = 0x1b;			/* ... */
 
 	*(p++) = 0xff;			/* result */
@@ -437,12 +437,12 @@ static int scte104_generate_immediate_in_to_network(const struct scte35_splice_i
 	uint8_t *p = b;
 
 	/* single_message_operation() */
-	*(p++) = 0x08;			/* Version */
+	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
 
 	*(p++) = 0x00;			/* opID - init_request_data() */
 	*(p++) = 0x01;			/* ... */
 
-	*(p++) = 0x00;			/* messageSize (entire size excluding Version) */
+	*(p++) = 0x00;			/* messageSize (entire size excluding Payload desc) */
 	*(p++) = 0x1b;			/* ... */
 
 	*(p++) = 0xff;			/* result */
@@ -495,12 +495,12 @@ static int scte104_generate_normal_out_of_network(const struct scte35_splice_ins
 	uint32_t preroll = (si->splice_time.pts_time - pts) / 90;
 
 	/* single_message_operation() */
-	*(p++) = 0x08;			/* Version */
+	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
 
 	*(p++) = 0x00;			/* opID - init_request_data() */
 	*(p++) = 0x01;			/* ... */
 
-	*(p++) = 0x00;			/* messageSize (entire size excluding Version) */
+	*(p++) = 0x00;			/* messageSize (entire size excluding Payload desc) */
 	*(p++) = 0x1b;			/* ... */
 
 	*(p++) = 0xff;			/* result */
