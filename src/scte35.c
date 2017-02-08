@@ -558,6 +558,12 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	klbs_write_bits(bs, 0xff, 2); /* Reserved */
 	klbs_write_bits(bs, 0, 12); /* Section length, to be filled later */
 
+	/* Technically SCTE104 can pass us an arbitrary protocol version and the SCTE104 Figure 8-1
+	 * mapping table says field SCTE35_protocol_version should be mapped into the SCTE35
+	 * reconstructed table. I'm NOT going to do that, because the SCTE35 spec says the only valid
+	 * value is zero. So, I'm going to ensure that any SCTE35 message we generate contains
+	 * protocol_zero, regardless.
+	 */
 	klbs_write_bits(bs, si->protocol_version, 8);
 	assert(si->protocol_version == 0);
 
