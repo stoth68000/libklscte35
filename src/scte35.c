@@ -548,6 +548,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	klbs_write_set_buffer(bs, buffer, buffer_length_bytes);
 
 	klbs_write_bits(bs, si->table_id, 8);
+	assert(si->table_id == SCTE35_TABLE_ID);
 	klbs_write_bits(bs, si->section_syntax_indicator, 1);
 	assert(si->section_syntax_indicator == 0);
 
