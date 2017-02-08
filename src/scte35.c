@@ -568,10 +568,10 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	assert(si->protocol_version == 0);
 
 	klbs_write_bits(bs, si->encrypted_packet, 1);
-	assert(si->encrypted_packet == 0);
+	assert(si->encrypted_packet == 0); /* No support */
 
 	klbs_write_bits(bs, si->encryption_algorithm, 6);
-	assert(si->encryption_algorithm == 0);
+	assert(si->encryption_algorithm == 0); /* No support */
 
 	klbs_write_bits(bs, si->pts_adjustment, 33);
 	klbs_write_bits(bs, si->cw_index, 8);
