@@ -37,7 +37,7 @@ int demo_main(int argc, char *argv[])
 	printf("Generating out of network table section, event 1000, program 2000\n");
 	uint8_t *section = 0;
 	uint32_t sectionLengthBytes;
-	scte35_generate_immediate_out_of_network(0x1000, 0x2000, &section, &sectionLengthBytes);
+	scte35_generate_out_of_network(0x1000, 0x2000, &section, &sectionLengthBytes, 1);
 	hexdump(section, sectionLengthBytes, 32);
 
 	/* Generate a return IN_TO_NETWORK IMMEDIATE section */

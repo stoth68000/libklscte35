@@ -60,8 +60,8 @@ const char *scte35_description_command_type(uint32_t command_type)
 	}
 }
 
-int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
-	uint8_t **dst, uint32_t *dstLengthBytes)
+int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
+	uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	si->splice_insert.splice_event_id = eventId;
@@ -71,7 +71,7 @@ int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, 
 	si->splice_insert.duration_flag = 1;
 	si->splice_insert.duration.auto_return = autoReturn;
 	si->splice_insert.duration.duration = duration * 9000;
-	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.splice_immediate_flag = immediate ? 1 : 0;
 	si->splice_insert.unique_program_id = uniqueProgramId;
 	si->splice_insert.avail_num = 0; /* Not supported */
 	si->splice_insert.avails_expected = 0; /* Not supported */
@@ -96,8 +96,8 @@ int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, 
 }
 
 /* Go into Ad, switch away from the network */
-int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
-	uint8_t **dst, uint32_t *dstLengthBytes)
+int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
+	uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	si->splice_insert.splice_event_id = eventId;
@@ -105,7 +105,7 @@ int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t 
 	si->splice_insert.out_of_network_indicator = 1;
 	si->splice_insert.program_splice_flag = 1;
 	si->splice_insert.duration_flag = 0;
-	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.splice_immediate_flag = immediate ? 1 : 0;
 	si->splice_insert.unique_program_id = uniqueProgramId;
 	si->splice_insert.avail_num = 0; /* Not supported */
 	si->splice_insert.avails_expected = 0; /* Not supported */

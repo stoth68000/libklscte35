@@ -143,11 +143,12 @@ struct scte35_splice_info_section_s
  * @param[in]	uint32_t eventId - Brief description goes here.
  * @param[out]	uint8_t **dst - New allocation contacting the SCTE35 constructed section.
  * @param[out]	uint32_t **dstLengthBytes - Number of bytes at dst
+ * @param[in]	uint32_t immediate - Perform an immediate switch away from network?
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
-        uint8_t **dst, uint32_t *dstLengthBytes);
+int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
+        uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate);
 
 /**
  * @brief	Go into Ad, switch away from the network for a period of time.
@@ -158,11 +159,12 @@ int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t 
  * @param[in]	int autoReturn - Automatically return to network after break?
  * @param[out]	uint8_t **dst - New allocation contacting the SCTE35 constructed section.
  * @param[out]	uint32_t **dstLengthBytes - Number of bytes at dst
+ * @param[in]	uint32_t immediate - Perform an immediate switch away from network?
  * @return	0 - Success
  * @return	< 0 - Error
  */
-int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
-        uint8_t **dst, uint32_t *dstLengthBytes);
+int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
+        uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate);
 
 /**
  * @brief	Go out of Ad break, return back to the network.
