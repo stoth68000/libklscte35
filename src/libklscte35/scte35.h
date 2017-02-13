@@ -148,7 +148,8 @@ struct scte35_splice_info_section_s
  * @return	< 0 - Error
  */
 int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
-        uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate);
+				   uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate,
+				   uint16_t availNum, uint16_t availsExpected);
 
 /**
  * @brief	Go into Ad, switch away from the network for a period of time.
@@ -164,7 +165,8 @@ int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
  * @return	< 0 - Error
  */
 int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
-        uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate);
+					    uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate,
+					    uint16_t availNum, uint16_t availsExpected);
 
 /**
  * @brief	Go out of Ad break, return back to the network.
@@ -177,7 +179,8 @@ int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t e
  * @return	< 0 - Error
  */
 int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t eventId,
-        uint8_t **dst, uint32_t *dstLengthBytes);
+					    uint8_t **dst, uint32_t *dstLengthBytes,
+					    uint16_t availNum, uint16_t availsExpected);
 
 /**
  * @brief	Serialize object si out to buffer as a scte35 table section.
