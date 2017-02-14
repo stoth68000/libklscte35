@@ -404,30 +404,39 @@ static int scte104_generate_splice_insert(const struct scte35_splice_insert_s *s
 		}
 	}
 
-	uint8_t *b = calloc(1, 32);
+	uint8_t *b = calloc(1, 31);
 	uint8_t *p = b;
 
-	/* single_message_operation() */
+	/* multiple_operation_message (Sec 7.2.3) */
 	*(p++) = 0x08;			/* SMPTE 2010 Payload Descriptor */
 
-	*(p++) = 0x00;			/* opID - init_request_data() */
-	*(p++) = 0x01;			/* ... */
-
-	*(p++) = 0x00;			/* messageSize (entire size excluding Payload desc) */
-	*(p++) = 0x1b;			/* ... */
-
-	*(p++) = 0xff;			/* result */
+	*(p++) = 0xff;			/* reserved */
 	*(p++) = 0xff;			/* ... */
 
-	*(p++) = 0xff;			/* result_expansion */
-	*(p++) = 0xff;			/* ... */
+	*(p++) = 0x00;			/* messageSize */
+	*(p++) = 0x1e;			/* ... */
 
 	*(p++) = 0x00;			/* protocol_version */
+
 	*(p++) = 0x00;			/* AS_index */
+
 	*(p++) = 0x00;			/* message_number */
 
 	*(p++) = 0x00;			/* DPI_PID_index */
 	*(p++) = 0x00;			/* ... */
+
+	*(p++) = 0x00;			/* SCTE35_protocol_version */
+
+	/* timestamp (Sec 11.5) */
+	*(p++) = 0x00;			/* time_type */
+
+	*(p++) = 0x01;			/* num_ops */
+
+	*(p++) = 0x01;			/* opID - splice_request_data() */
+	*(p++) = 0x01;			/* ... */
+
+	*(p++) = 0x00;			/* data_length */
+	*(p++) = 0x0e;			/* ... */
 
 	/* splice_request_data() */
 	*(p++) = splice_insert_type;
