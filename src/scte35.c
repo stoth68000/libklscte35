@@ -60,8 +60,8 @@ const char *scte35_description_command_type(uint32_t command_type)
 	}
 }
 
-int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
-	uint8_t **dst, uint32_t *dstLengthBytes)
+int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
+	uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	si->splice_insert.splice_event_id = eventId;
@@ -71,7 +71,7 @@ int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, 
 	si->splice_insert.duration_flag = 1;
 	si->splice_insert.duration.auto_return = autoReturn;
 	si->splice_insert.duration.duration = duration * 9000;
-	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.splice_immediate_flag = immediate ? 1 : 0;
 	si->splice_insert.unique_program_id = uniqueProgramId;
 	si->splice_insert.avail_num = 0; /* Not supported */
 	si->splice_insert.avails_expected = 0; /* Not supported */
@@ -96,8 +96,8 @@ int scte35_generate_immediate_out_of_network_duration(uint16_t uniqueProgramId, 
 }
 
 /* Go into Ad, switch away from the network */
-int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
-	uint8_t **dst, uint32_t *dstLengthBytes)
+int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
+	uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	si->splice_insert.splice_event_id = eventId;
@@ -105,7 +105,7 @@ int scte35_generate_immediate_out_of_network(uint16_t uniqueProgramId, uint32_t 
 	si->splice_insert.out_of_network_indicator = 1;
 	si->splice_insert.program_splice_flag = 1;
 	si->splice_insert.duration_flag = 0;
-	si->splice_insert.splice_immediate_flag = 1;
+	si->splice_insert.splice_immediate_flag = immediate ? 1 : 0;
 	si->splice_insert.unique_program_id = uniqueProgramId;
 	si->splice_insert.avail_num = 0; /* Not supported */
 	si->splice_insert.avails_expected = 0; /* Not supported */
@@ -510,7 +510,7 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 	if (!si)
 		return 0;
 
-	si->table_id = 0xFC;
+	si->table_id = SCTE35_TABLE_ID;
 	si->splice_command_type = command_type;
 	si->tier = 0xFFF; /* We don't support tiers. So the spec says value 0xFFF will be passed down stream and
 			   * ignored by any equipment. So, lets pass a value to be ignored.
@@ -528,6 +528,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	klbs_write_set_buffer(bs, buffer, buffer_length_bytes);
 
 	klbs_write_bits(bs, si->table_id, 8);
+	assert(si->table_id == SCTE35_TABLE_ID);
 	klbs_write_bits(bs, si->section_syntax_indicator, 1);
 	assert(si->section_syntax_indicator == 0);
 
@@ -537,14 +538,20 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	klbs_write_bits(bs, 0xff, 2); /* Reserved */
 	klbs_write_bits(bs, 0, 12); /* Section length, to be filled later */
 
+	/* Technically SCTE104 can pass us an arbitrary protocol version and the SCTE104 Figure 8-1
+	 * mapping table says field SCTE35_protocol_version should be mapped into the SCTE35
+	 * reconstructed table. I'm NOT going to do that, because the SCTE35 spec says the only valid
+	 * value is zero. So, I'm going to ensure that any SCTE35 message we generate contains
+	 * protocol_zero, regardless.
+	 */
 	klbs_write_bits(bs, si->protocol_version, 8);
 	assert(si->protocol_version == 0);
 
 	klbs_write_bits(bs, si->encrypted_packet, 1);
-	assert(si->encrypted_packet == 0);
+	assert(si->encrypted_packet == 0); /* No support */
 
 	klbs_write_bits(bs, si->encryption_algorithm, 6);
-	assert(si->encryption_algorithm == 0);
+	assert(si->encryption_algorithm == 0); /* No support */
 
 	klbs_write_bits(bs, si->pts_adjustment, 33);
 	klbs_write_bits(bs, si->cw_index, 8);

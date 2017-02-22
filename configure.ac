@@ -19,7 +19,7 @@ AC_PROG_LIBTOOL
 if test `uname -s` = "Darwin"
 then
 CFLAGS+=" -I/usr/local/include"
-LDFLAGS+="-L/usr/local/lib"
+LDFLAGS+=" -L/usr/local/lib"
 fi
 
 # We always build with -fPIC in case our static libraries end up

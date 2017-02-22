@@ -21,7 +21,7 @@ Installing LibKLSCTE35
 ****************
 The following is a list of dependencies needed to successfully install LibKLSCTE35:
 
-* VideoLan biTStream project
+* libklscte35
 
 
 ## Documentation:
