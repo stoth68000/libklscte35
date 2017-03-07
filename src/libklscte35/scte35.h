@@ -30,6 +30,7 @@
 #define SCTE35_H
 
 #include <stdint.h>
+#include <libklvanc/vanc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -135,6 +136,17 @@ struct scte35_splice_info_section_s
 	uint32_t crc_32;
 	uint32_t crc_32_is_valid;
 };
+
+/* This is used for passing around lists of splices */
+#define MAX_SPLICES 64
+struct splice_entries
+{
+	uint32_t num_splices;
+	uint8_t  *splice_entry[MAX_SPLICES];
+	uint32_t splice_size[MAX_SPLICES];
+};
+
+int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results);
 
 /**
  * @brief	Go into Ad, switch away from the network.

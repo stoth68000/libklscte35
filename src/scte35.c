@@ -29,6 +29,8 @@
 #include <errno.h>
 #include <stdarg.h>
 
+#include "libklvanc/vanc.h"
+#include "libklvanc/vanc-scte_104.h"
 #include <libklscte35/scte35.h>
 #include "klbitstream_readwriter.h"
 #include "crc32.h"
@@ -58,6 +60,152 @@ const char *scte35_description_command_type(uint32_t command_type)
 	case SCTE35_COMMAND_TYPE__PRIVATE: return "PRIVATE_COMMAND"; 
 	default: return "Reserved";
 	}
+}
+
+static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOpNumber,
+					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct scte35_splice_info_section_s *si;
+
+	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	splices[(*outSpliceNum)++] = si;
+
+	si->splice_insert.splice_event_id = pkt->sr_data.splice_event_id;
+	si->splice_insert.splice_event_cancel_indicator = 0;
+	si->splice_insert.out_of_network_indicator = 0;
+	si->splice_insert.splice_immediate_flag = 0;
+	si->splice_insert.program_splice_flag = 1;
+	si->splice_insert.duration_flag = 0;
+	si->splice_insert.duration.duration = 0;
+	si->splice_insert.duration.auto_return = 0;
+
+	switch(pkt->sr_data.splice_insert_type) {
+	case SPLICESTART_NORMAL:
+		si->splice_insert.out_of_network_indicator = 1;
+		break;
+	case SPLICESTART_IMMEDIATE:
+		si->splice_insert.splice_immediate_flag = 1;
+		si->splice_insert.out_of_network_indicator = 1;
+		break;
+	case SPLICEEND_NORMAL:
+		break;
+	case SPLICEEND_IMMEDIATE:
+		si->splice_insert.splice_immediate_flag = 1;
+		break;
+	case SPLICE_CANCEL:
+		si->splice_insert.splice_event_cancel_indicator = 1;
+		break;
+	default:
+		fprintf(stderr, "Unknown Splice insert type %d\n",
+			pkt->sr_data.splice_insert_type);
+		return -1;
+	}
+
+	if (pkt->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	    pkt->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE) {
+		if (pkt->sr_data.pre_roll_time > 0) {
+			/* Set PTS */
+		}
+	}
+
+	if (pkt->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	    pkt->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE) {
+		if (pkt->sr_data.brk_duration > 0) {
+			si->splice_insert.duration_flag = 1;
+			si->splice_insert.duration.duration = pkt->sr_data.brk_duration * 9000;
+		}
+		si->splice_insert.duration.auto_return = pkt->sr_data.auto_return_flag;
+	}
+
+	si->splice_insert.unique_program_id = pkt->sr_data.unique_program_id;
+	si->splice_insert.avail_num = pkt->sr_data.avail_num;
+	si->splice_insert.avails_expected = pkt->sr_data.avails_expected;
+
+	return 0;
+}
+
+static int scte35_generate_splicenull(struct packet_scte_104_s *pkt, int momOpNumber,
+				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct scte35_splice_info_section_s *si;
+
+	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
+	splices[(*outSpliceNum)++] = si;
+
+	return 0;
+}
+
+static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNumber,
+				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct scte35_splice_info_section_s *si;
+
+	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	splices[(*outSpliceNum)++] = si;
+
+	si->time_signal.time_specified_flag = 1;
+	/* FIXME */
+	si->time_signal.pts_time = 0;
+
+	return 0;
+}
+
+int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results)
+{
+	/* See SCTE-104 Sec 8.3.1.1 Semantics of fields in splice_request_data() */
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct scte35_splice_info_section_s *splices[MAX_SPLICES];
+	int num_splices = 0;
+
+	if (pkt->so_msg.opID != 0xffff) {
+		/* This is not a Multiple Operation Message, and we don't support
+		   any Single Operation Messages */
+		return -1;
+	}
+
+	/* Iterate over each of the operations in the Multiple Operation Message */
+	for (int i = 0; i < m->num_ops; i++) {
+		struct multiple_operation_message_operation *o = &m->ops[i];
+
+		switch(o->opID) {
+		case MO_INIT_REQUEST_DATA:
+			scte35_generate_spliceinsert(pkt, i, splices, &num_splices);
+			break;
+		case MO_SPLICE_NULL_REQUEST_DATA:
+			scte35_generate_splicenull(pkt, i, splices, &num_splices);
+			break;
+		case MO_TIME_SIGNAL_REQUEST_DATA:
+			scte35_generate_timesignal(pkt, i, splices, &num_splices);
+			break;
+		default:
+			continue;
+		}
+	}
+
+	/* Now that we've parsed all the operations in the MOM, convert the splices into
+	   sections that can be fed to the mux */
+	for (int i = 0; i < num_splices; i++) {
+		struct scte35_splice_info_section_s *si = splices[i];
+
+		int l = 4096;
+		uint8_t *buf = calloc(1, l);
+		if (!buf)
+			return -1;
+
+		ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
+		if (packedLength < 0) {
+			free(buf);
+			scte35_splice_info_section_free(si);
+			return -1;
+		}
+
+		results->splice_entry[i] = buf;
+		results->splice_size[i] = packedLength;
+		scte35_splice_info_section_free(si);
+	}
+	results->num_splices = num_splices;
+
+	return 0;
 }
 
 int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
@@ -202,6 +350,9 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 			SHOW_LINE_U32("\t", s->splice_insert.avails_expected);
 		}
 
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_NULL) {
+		/* Nothing to do */
 	} else
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
 		SHOW_LINE_U32("", s->time_signal.time_specified_flag);
