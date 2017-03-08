@@ -1,12 +1,13 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-CFLAGS += -Wall -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BITS=64 -O3 \
+AM_CPPFLAGS = -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BITS=64 \
 	-D_BSD_SOURCE \
 	-I$(top_srcdir)/src \
 	-DKL_USERSPACE
+AM_CFLAGS = -Wall -O3
 
-LDFLAGS += -L$(top_builddir)/src/.libs -lpthread -lz -ldl -lklvanc -lklscte35
+LDADD = ../src/libklscte35.la -lpthread -lz -ldl -lklvanc
 
 if DEBUG
 	CFLAGS += -g
