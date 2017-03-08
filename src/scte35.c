@@ -40,7 +40,7 @@ do {\
   if (ctx->verbose >= level) printf(fmt, ## arg); \
 } while(0);
 
-#if 0 
+#if 1
 static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typically 16 */)
 {
 	for (unsigned int i = 0; i < len; i++)
@@ -152,6 +152,59 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
+static int scte35_append_dtmf(struct packet_scte_104_s *pkt, int momOpNumber,
+			      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct scte35_splice_info_section_s *si;
+	unsigned char buffer[256];
+	int i;
+
+	/* Find the most recent splice to append the descriptor to */
+	for (i = *outSpliceNum - 1; i >= 0; i--) {
+		si = splices[i];
+		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+			break;
+		}
+	}
+
+	if (i < 0) {
+		/* There was no splice earlier in the MOM to append to */
+		return -1;
+	}
+
+	/* Construct the actual SCTE-35 descriptor payload */
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
+	klbs_write_bits(bs, 0x01, 8);
+	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
+	klbs_write_bits(bs, 'C', 8);
+	klbs_write_bits(bs, 'U', 8);
+	klbs_write_bits(bs, 'E', 8);
+	klbs_write_bits(bs, 'I', 8);
+	klbs_write_bits(bs, op->dtmf_data.pre_roll_time, 8);
+	klbs_write_bits(bs, op->dtmf_data.dtmf_length, 3);
+	klbs_write_bits(bs, 0x1f, 5); /* Reserved */
+	for (i = 0; i < op->dtmf_data.dtmf_length; i++) {
+		klbs_write_bits(bs, op->dtmf_data.dtmf_char[i], 8);
+	}
+	buffer[1] = klbs_get_byte_count(bs) - 2;
+
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
+	si->descriptor_loop_length += klbs_get_byte_count(bs);
+
+	klbs_write_buffer_complete(bs);
+	klbs_free(bs);
+
+	return 0;
+}
+
+
 int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results)
 {
 	/* See SCTE-104 Sec 8.3.1.1 Semantics of fields in splice_request_data() */
@@ -178,6 +231,9 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			break;
 		case MO_TIME_SIGNAL_REQUEST_DATA:
 			scte35_generate_timesignal(pkt, i, splices, &num_splices);
+			break;
+		case MO_INSERT_DTMF_REQUEST_DATA:
+			scte35_append_dtmf(pkt, i, splices, &num_splices);
 			break;
 		default:
 			continue;
@@ -367,6 +423,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 
         /* We don't support descriptor parsing. */
 	SHOW_LINE_U32("", s->descriptor_loop_length);
+	hexdump(s->splice_descriptor, s->descriptor_loop_length, 16);
 
 	SHOW_LINE_U32("", s->e_crc_32);
 	SHOW_LINE_U32("", s->crc_32);
