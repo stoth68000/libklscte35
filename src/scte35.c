@@ -65,12 +65,14 @@ const char *scte35_description_command_type(uint32_t command_type)
 static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOpNumber,
 					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	splices[(*outSpliceNum)++] = si;
 
-	si->splice_insert.splice_event_id = pkt->sr_data.splice_event_id;
+	si->splice_insert.splice_event_id = op->sr_data.splice_event_id;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 0;
 	si->splice_insert.splice_immediate_flag = 0;
@@ -79,7 +81,7 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 	si->splice_insert.duration.duration = 0;
 	si->splice_insert.duration.auto_return = 0;
 
-	switch(pkt->sr_data.splice_insert_type) {
+	switch(op->sr_data.splice_insert_type) {
 	case SPLICESTART_NORMAL:
 		si->splice_insert.out_of_network_indicator = 1;
 		break;
@@ -97,29 +99,29 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 		break;
 	default:
 		fprintf(stderr, "Unknown Splice insert type %d\n",
-			pkt->sr_data.splice_insert_type);
+			op->sr_data.splice_insert_type);
 		return -1;
 	}
 
-	if (pkt->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
-	    pkt->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE) {
-		if (pkt->sr_data.pre_roll_time > 0) {
+	if (op->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	    op->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE) {
+		if (op->sr_data.pre_roll_time > 0) {
 			/* Set PTS */
 		}
 	}
 
-	if (pkt->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
-	    pkt->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE) {
-		if (pkt->sr_data.brk_duration > 0) {
+	if (op->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	    op->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE) {
+		if (op->sr_data.brk_duration > 0) {
 			si->splice_insert.duration_flag = 1;
-			si->splice_insert.duration.duration = pkt->sr_data.brk_duration * 9000;
+			si->splice_insert.duration.duration = op->sr_data.brk_duration * 9000;
 		}
-		si->splice_insert.duration.auto_return = pkt->sr_data.auto_return_flag;
+		si->splice_insert.duration.auto_return = op->sr_data.auto_return_flag;
 	}
 
-	si->splice_insert.unique_program_id = pkt->sr_data.unique_program_id;
-	si->splice_insert.avail_num = pkt->sr_data.avail_num;
-	si->splice_insert.avails_expected = pkt->sr_data.avails_expected;
+	si->splice_insert.unique_program_id = op->sr_data.unique_program_id;
+	si->splice_insert.avail_num = op->sr_data.avail_num;
+	si->splice_insert.avails_expected = op->sr_data.avails_expected;
 
 	return 0;
 }
