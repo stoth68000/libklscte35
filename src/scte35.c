@@ -152,6 +152,39 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
+static int scte35_append_descriptor(struct packet_scte_104_s *pkt, int momOpNumber,
+			      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct insert_descriptor_request_data *des = &op->descriptor_data;
+	struct scte35_splice_info_section_s *si;
+	int i;
+
+	/* Find the most recent splice to append the descriptor to */
+	for (i = *outSpliceNum - 1; i >= 0; i--) {
+		si = splices[i];
+		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+			break;
+		}
+	}
+
+	if (i < 0) {
+		/* There was no splice earlier in the MOM to append to */
+		return -1;
+	}
+
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					des->total_length + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, des->descriptor_bytes,
+	       des->total_length);
+	si->descriptor_loop_length += des->total_length;
+
+	return 0;
+}
+
 static int scte35_append_dtmf(struct packet_scte_104_s *pkt, int momOpNumber,
 			      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
@@ -316,6 +349,9 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			break;
 		case MO_TIME_SIGNAL_REQUEST_DATA:
 			scte35_generate_timesignal(pkt, i, splices, &num_splices);
+			break;
+		case MO_INSERT_DESCRIPTOR_REQUEST_DATA:
+			scte35_append_descriptor(pkt, i, splices, &num_splices);
 			break;
 		case MO_INSERT_DTMF_REQUEST_DATA:
 			scte35_append_dtmf(pkt, i, splices, &num_splices);
