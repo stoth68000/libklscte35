@@ -159,21 +159,13 @@ static int scte35_append_descriptor(struct packet_scte_104_s *pkt, int momOpNumb
 	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct insert_descriptor_request_data *des = &op->descriptor_data;
 	struct scte35_splice_info_section_s *si;
-	int i;
 
-	/* Find the most recent splice to append the descriptor to */
-	for (i = *outSpliceNum - 1; i >= 0; i--) {
-		si = splices[i];
-		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
-			break;
-		}
-	}
-
-	if (i < 0) {
-		/* There was no splice earlier in the MOM to append to */
+	/* Append descriptor works with *any* splice type, so just find the most
+	   recent descriptor */
+	if (*outSpliceNum == 0)
 		return -1;
-	}
 
+	si = splices[*outSpliceNum - 1];
 
 	/* Append to splice_descriptor (creating if not already allocated) */
 	si->splice_descriptor = realloc(si->splice_descriptor,
