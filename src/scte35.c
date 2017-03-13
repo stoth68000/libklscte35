@@ -670,8 +670,11 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	} else
 		si->crc_32_is_valid = 0;
 
+	/* Grab the byte count to avoid use-after-free condition */
+	int byteCount = klbs_get_byte_count(bs);
 	klbs_free(bs);
-	return klbs_get_byte_count(bs);
+
+	return byteCount;
 }
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
