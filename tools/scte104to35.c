@@ -104,7 +104,7 @@ static int parse(struct vanc_context_s *ctx, uint8_t *sec, int byteCount)
 		arr[i] = sec[i * 2] << 8 | sec[i * 2 + 1];
 	}
 
-	int ret = vanc_packet_parse(ctx, 13, arr, byteCount / 2 * (sizeof(unsigned short)));
+	int ret = vanc_packet_parse(ctx, 13, arr, byteCount / sizeof(unsigned short));
 	free(arr);
 
 	return ret;
