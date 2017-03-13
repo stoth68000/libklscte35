@@ -83,6 +83,7 @@ static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struc
 			scte35_splice_info_section_print(s);
 			scte35_splice_info_section_free(s);
 		}
+		free(results.splice_entry[i]);
 	}
 	return 0;
 }
@@ -104,10 +105,9 @@ static int parse(struct vanc_context_s *ctx, uint8_t *sec, int byteCount)
 	}
 
 	int ret = vanc_packet_parse(ctx, 13, arr, byteCount / 2 * (sizeof(unsigned short)));
-	if (ret < 0)
-		return ret;
+	free(arr);
 
-	return 0;
+	return ret;
 }
 
 int scte104to35_main(int argc, char *argv[])
@@ -123,6 +123,7 @@ int scte104to35_main(int argc, char *argv[])
 
 	parse(ctx, &__0_vancentry[0], sizeof(__0_vancentry));
 
+	vanc_context_destroy(ctx);
 	printf("program complete.\n");
 	return 0;
 }
