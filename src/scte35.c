@@ -333,7 +333,7 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 		struct multiple_operation_message_operation *o = &m->ops[i];
 
 		switch(o->opID) {
-		case MO_INIT_REQUEST_DATA:
+		case MO_SPLICE_REQUEST_DATA:
 			scte35_generate_spliceinsert(pkt, i, splices, &num_splices);
 			break;
 		case MO_SPLICE_NULL_REQUEST_DATA:
