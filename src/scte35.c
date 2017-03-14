@@ -666,8 +666,10 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	si->descriptor_loop_length = klbs_read_bits(bs, 16);
 	if (si->descriptor_loop_length) {
 		si->splice_descriptor = malloc(si->descriptor_loop_length);
-		if (!si->splice_descriptor)
+		if (si->splice_descriptor == NULL) {
+			klbs_free(bs);
 			return -1;
+		}
 		for (int i = 0; i < si->descriptor_loop_length; i++) {
 			si->splice_descriptor[i] = klbs_read_bits(bs, 8);
 		}
