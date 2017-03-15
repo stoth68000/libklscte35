@@ -363,8 +363,10 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 
 		int l = 4096;
 		uint8_t *buf = calloc(1, l);
-		if (!buf)
+		if (!buf) {
+			scte35_splice_info_section_free(si);
 			return -1;
+		}
 
 		ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 		if (packedLength < 0) {
@@ -401,8 +403,10 @@ int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t e
 
 	int l = 4096;
 	uint8_t *buf = calloc(1, l);
-	if (!buf)
+	if (!buf) {
+		scte35_splice_info_section_free(si);
 		return -1;
+	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
@@ -436,8 +440,10 @@ int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
 
 	int l = 4096;
 	uint8_t *buf = calloc(1, l);
-	if (!buf)
+	if (!buf) {
+		scte35_splice_info_section_free(si);
 		return -1;
+	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
@@ -470,8 +476,10 @@ int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t e
 
 	int l = 4096;
 	uint8_t *buf = calloc(1, l);
-	if (!buf)
+	if (!buf) {
+		scte35_splice_info_section_free(si);
 		return -1;
+	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
