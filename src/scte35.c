@@ -389,6 +389,8 @@ int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t e
 					    uint16_t availsExpected)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	if (si == NULL)
+		return -1;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 1;
@@ -428,6 +430,8 @@ int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
 				   uint16_t availNum, uint16_t availsExpected)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	if (si == NULL)
+		return -1;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 1;
@@ -464,6 +468,8 @@ int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t e
 					    uint16_t availsExpected)
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	if (si == NULL)
+		return -1;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 0;
@@ -662,8 +668,10 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	si->descriptor_loop_length = klbs_read_bits(bs, 16);
 	if (si->descriptor_loop_length) {
 		si->splice_descriptor = malloc(si->descriptor_loop_length);
-		if (!si->splice_descriptor)
+		if (si->splice_descriptor == NULL) {
+			klbs_free(bs);
 			return -1;
+		}
 		for (int i = 0; i < si->descriptor_loop_length; i++) {
 			si->splice_descriptor[i] = klbs_read_bits(bs, 8);
 		}
