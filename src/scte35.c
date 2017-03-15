@@ -581,6 +581,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	assert(si->private_indicator == 0);
 
 	uint32_t v = klbs_read_bits(bs, 2); /* Reserved */
+	assert(v == 0x3);
 
 	//
 	si->section_length = klbs_read_bits(bs, 12);
