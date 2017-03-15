@@ -713,7 +713,8 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
-	free(s->splice_descriptor);
+	if (s->splice_descriptor)
+		free(s->splice_descriptor);
 	free(s);
 }
 
