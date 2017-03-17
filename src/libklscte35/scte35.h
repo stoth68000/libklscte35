@@ -81,20 +81,13 @@ struct splice_descriptor_dtmf
 /* SCTE-35 Sec 10.3.3 */
 struct splice_descriptor_segmentation
 {
-	uint8_t pre_roll_time;
-	uint8_t dtmf_length;
-	uint8_t dtmf_char[8];
-};
-
-/* SCTE-35 Sec 10.3.4 */
-struct splice_descriptor_time
-{
 	uint32_t event_id;
 	uint8_t event_cancel_indicator;
 	uint8_t program_segmentation_flag;
 	uint8_t segmentation_duration_flag;
 	uint8_t delivery_not_restricted_flag;
 	uint8_t web_delivery_allowed_flag;
+	uint8_t no_regional_blackout_flag;
 	uint8_t archive_allowed_flag;
 	uint8_t device_restrictions;
 	uint64_t segmentation_duration;
@@ -106,6 +99,12 @@ struct splice_descriptor_time
 	uint8_t segments_expected;
 	uint8_t sub_segment_num;
 	uint8_t sub_segments_expected;
+};
+
+/* SCTE-35 Sec 10.3.4 */
+struct splice_descriptor_time
+{
+	/* FIXME */
 };
 
 /* Used for protocol extensions (e.g. arbitrary/new descriptors not in current spec) */
