@@ -457,6 +457,65 @@ int scte35_append_dtmf(struct scte35_splice_info_section_s *si, struct splice_de
 	return 0;
 }
 
+int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	struct splice_descriptor_segmentation *seg = &desc->seg_data;
+	unsigned char buffer[256];
+
+	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
+	klbs_write_bits(bs, 0x02, 8); /* Splice Descriptor Tag */
+	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
+	klbs_write_bits(bs, desc->identifier, 32);
+	klbs_write_bits(bs, seg->event_id, 32);
+	klbs_write_bits(bs, seg->event_cancel_indicator, 1);
+	klbs_write_bits(bs, 0x7f, 7); /* Reserved */
+	if (seg->event_cancel_indicator == 0) {
+		klbs_write_bits(bs, 0x01, 1); /* Program Segmentation Flag */
+		klbs_write_bits(bs, seg->segmentation_duration ? 1 : 0, 1);
+		klbs_write_bits(bs, seg->delivery_not_restricted_flag, 1);
+		if (seg->delivery_not_restricted_flag == 0) {
+			klbs_write_bits(bs, seg->web_delivery_allowed_flag, 1);
+			klbs_write_bits(bs, seg->no_regional_blackout_flag, 1);
+			klbs_write_bits(bs, seg->archive_allowed_flag, 1);
+			klbs_write_bits(bs, seg->device_restrictions, 2);
+		} else {
+			klbs_write_bits(bs, 0x1f, 5); /* Reserved */
+		}
+		if (0) { /* Program Segmentation Flag not set*/
+			/* FIXME: Component mode not currently supported */
+		}
+		if (seg->segmentation_duration) {
+			/* FIXME: convert to PTS??? */
+			klbs_write_bits(bs, seg->segmentation_duration, 40);
+		}
+		klbs_write_bits(bs, seg->upid_type, 8);
+		klbs_write_bits(bs, seg->upid_length, 8);
+		for (int i = 0; i < seg->upid_length; i++) {
+			klbs_write_bits(bs, seg->upid[i], 8);
+		}
+		klbs_write_bits(bs, seg->type_id, 8);
+		klbs_write_bits(bs, seg->segment_num, 8);
+		klbs_write_bits(bs, seg->segments_expected, 8);
+		if (seg->type_id == 0x34 || seg->type_id == 0x36) {
+			/* FIXME: Sub segment num */
+		}
+	}
+	klbs_write_buffer_complete(bs);
+
+	buffer[1] = klbs_get_byte_count(bs) - 2;
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
+	si->descriptor_loop_length += klbs_get_byte_count(bs);
+
+	klbs_free(bs);
+
+	return 0;
+}
+
 int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
 {
 	int ret;
@@ -575,6 +634,9 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 		switch(si->descriptors[i]->splice_descriptor_tag) {
 		case SCTE35_DTMF_DESCRIPTOR:
 			ret = scte35_append_dtmf(si, si->descriptors[i]);
+			break;
+		case SCTE35_SEGMENTATION_DESCRIPTOR:
+			ret = scte35_append_segmentation(si, si->descriptors[i]);
 			break;
 		default:
 			fprintf(stderr, "Cannot pack unknown descriptor 0x%x\n",
