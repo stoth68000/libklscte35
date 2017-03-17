@@ -188,7 +188,7 @@ static int scte35_append_104_dtmf(struct packet_scte_104_s *pkt, int momOpNumber
 	if (ret != 0)
 		return -1;
 
-	sd->identifier = 0x49455543; /* CUEI */
+	sd->identifier = 0x43554549; /* CUEI */
 	sd->dtmf_data.preroll = op->dtmf_data.pre_roll_time;
 	sd->dtmf_data.dtmf_count = op->dtmf_data.dtmf_length;
 
@@ -236,7 +236,7 @@ static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int mom
 	if (ret != 0)
 		return -1;
 
-	sd->identifier = 0x49455543; /* CUEI */
+	sd->identifier = 0x43554549; /* CUEI */
 	sd->seg_data.event_id = seg->event_id;
 	sd->seg_data.event_cancel_indicator = seg->event_cancel_indicator;
 	sd->seg_data.program_segmentation_flag = 1; /* FIXME: Component mode */
