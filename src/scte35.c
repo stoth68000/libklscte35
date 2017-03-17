@@ -516,6 +516,30 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	return 0;
 }
 
+int scte35_append_descriptor(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	unsigned char buffer[256];
+
+	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
+	klbs_write_bits(bs, desc->splice_descriptor_tag, 8);
+	klbs_write_bits(bs, desc->extra_data.descriptor_data_length, 8);
+	for (int i = 0; i < desc->extra_data.descriptor_data_length; i++) {
+		klbs_write_bits(bs, desc->extra_data.descriptor_data[i], 8);
+	}
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
+	si->descriptor_loop_length += klbs_get_byte_count(bs);
+
+	klbs_write_buffer_complete(bs);
+	klbs_free(bs);
+
+	return 0;
+}
+
 int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, uint8_t *buffer, uint32_t buffer_length_bytes)
 {
 	int ret;
@@ -639,9 +663,10 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 			ret = scte35_append_segmentation(si, si->descriptors[i]);
 			break;
 		default:
-			fprintf(stderr, "Cannot pack unknown descriptor 0x%x\n",
-				si->descriptors[i]->splice_descriptor_tag);
-			continue;
+			/* If it's not one of the known types, it's a unknown/proprietary
+			   descriptor */
+			ret = scte35_append_descriptor(si, si->descriptors[i]);
+			break;
 		}
 		if (ret != 0) {
 			fprintf(stderr, "Failed to serialize descriptor 0x%x\n",

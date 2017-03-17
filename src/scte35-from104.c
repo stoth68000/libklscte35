@@ -133,13 +133,16 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
-static int scte35_append_descriptor(struct packet_scte_104_s *pkt, int momOpNumber,
-			      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+static int scte35_append_104_descriptor(struct packet_scte_104_s *pkt, int momOpNumber,
+					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
 	struct multiple_operation_message *m = &pkt->mo_msg;
 	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct insert_descriptor_request_data *des = &op->descriptor_data;
 	struct scte35_splice_info_section_s *si;
+	struct splice_descriptor *sd;
+	uint8_t len;
+	int ret;
 
 	/* Append descriptor works with *any* splice type, so just find the most
 	   recent descriptor */
@@ -148,12 +151,18 @@ static int scte35_append_descriptor(struct packet_scte_104_s *pkt, int momOpNumb
 
 	si = splices[*outSpliceNum - 1];
 
-	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					des->total_length + si->descriptor_loop_length);
-	memcpy(si->splice_descriptor + si->descriptor_loop_length, des->descriptor_bytes,
-	       des->total_length);
-	si->descriptor_loop_length += des->total_length;
+	ret = alloc_SCTE_35_splice_descriptor(des->descriptor_bytes[0], &sd);
+	if (ret != 0)
+		return -1;
+
+	len = des->descriptor_bytes[1];
+	if (len > sizeof(sd->extra_data.descriptor_data)) {
+		len = sizeof(sd->extra_data.descriptor_data);
+	}
+	sd->extra_data.descriptor_data_length = len;
+	memcpy(&sd->extra_data.descriptor_data, des->descriptor_bytes + 2, len);
+
+	si->descriptors[si->descriptor_loop_count++] = sd;
 
 	return 0;
 }
@@ -298,7 +307,7 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			scte35_generate_timesignal(pkt, i, splices, &num_splices);
 			break;
 		case MO_INSERT_DESCRIPTOR_REQUEST_DATA:
-			scte35_append_descriptor(pkt, i, splices, &num_splices);
+			scte35_append_104_descriptor(pkt, i, splices, &num_splices);
 			break;
 		case MO_INSERT_DTMF_REQUEST_DATA:
 			scte35_append_104_dtmf(pkt, i, splices, &num_splices);
