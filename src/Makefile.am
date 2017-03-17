@@ -4,6 +4,8 @@ AUTOMAKE_OPTIONS = foreign
 lib_LTLIBRARIES = libklscte35.la
 
 libklscte35_la_SOURCES  = scte35.c
+libklscte35_la_SOURCES += scte35-to104.c
+libklscte35_la_SOURCES += scte35-from104.c
 libklscte35_la_SOURCES += crc32.c
 libklscte35_la_SOURCES += crc32.h
 libklscte35_la_SOURCES += klbitstream_readwriter.h
