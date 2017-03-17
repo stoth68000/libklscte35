@@ -60,9 +60,33 @@ static uint8_t mouse_btn[] = {
 	0x17, 0xd8, 0x2e 
 };
 
+#ifdef DEBUG_RENDER_104
+static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struct packet_scte_104_s *pkt)
+{
+	printf("%s:%s()\n", __FILE__, __func__);
+
+	/* Have the library display some debug */
+	printf("Asking libklvanc to dump a struct\n");
+	dump_SCTE_104(ctx, pkt);
+
+	return 0;
+}
+
+static struct vanc_callbacks_s callbacks =
+{
+	.scte_104		= cb_SCTE_104,
+};
+#endif
+
 static int parse(uint8_t *sec, int byteCount)
 {
 	printf("\nParsing a new SCTE35 section......\n");
+
+	printf("Original section data:\n");
+	for (int i = 0; i < byteCount; i++)
+		printf("%02x ", sec[i]);
+	printf("\n");
+
 	struct scte35_splice_info_section_s *s = scte35_splice_info_section_parse(sec, byteCount);
 	if (s) {
 
@@ -93,6 +117,18 @@ static int parse(uint8_t *sec, int byteCount)
 				for (int i = 0; i < vancWordCount; i++)
 					printf("%03x ", *(vancWords + i));
 				printf("\n");
+
+#ifdef DEBUG_RENDER_104
+				/* Feed it back into the VANC parser so we can decode it */
+				struct vanc_context_s *ctx;
+				if (vanc_context_create(&ctx) < 0) {
+					fprintf(stderr, "Error initializing library context\n");
+					exit(1);
+				}
+				ctx->verbose = 1;
+				ctx->callbacks = &callbacks;
+				int ret = vanc_packet_parse(ctx, 13, vancWords, vancWordCount);
+#endif
 
 				free(vancWords); /* Free the allocated resource */
 			} else
