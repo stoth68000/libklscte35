@@ -70,6 +70,9 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
+	if (!si)
+		return -1;
+
 	splices[(*outSpliceNum)++] = si;
 
 	si->splice_insert.splice_event_id = op->sr_data.splice_event_id;
@@ -132,6 +135,9 @@ static int scte35_generate_splicenull(struct packet_scte_104_s *pkt, int momOpNu
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
+	if (!si)
+		return -1;
+
 	splices[(*outSpliceNum)++] = si;
 
 	return 0;
@@ -143,6 +149,9 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		return -1;
+
 	splices[(*outSpliceNum)++] = si;
 
 	si->time_signal.time_specified_flag = 1;
@@ -334,6 +343,14 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 
 		switch(o->opID) {
 		case MO_SPLICE_REQUEST_DATA:
+		case MO_SPLICE_NULL_REQUEST_DATA:
+		case MO_TIME_SIGNAL_REQUEST_DATA:
+			if (num_splices == (MAX_SPLICES - 1))
+				continue;
+		}
+
+		switch(o->opID) {
+		case MO_SPLICE_REQUEST_DATA:
 			scte35_generate_spliceinsert(pkt, i, splices, &num_splices);
 			break;
 		case MO_SPLICE_NULL_REQUEST_DATA:
@@ -361,21 +378,28 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 	for (int i = 0; i < num_splices; i++) {
 		struct scte35_splice_info_section_s *si = splices[i];
 
+		/* We shouldn't need a null pointer check here, as we should never have nulls
+		 * in the list. Fixed the list to never include nulls.
+		 * So the static code analyzer don'es complain.
+		 */
+
 		int l = 4096;
 		uint8_t *buf = calloc(1, l);
-		if (!buf)
-			return -1;
+		if (!buf) {
+			scte35_splice_info_section_free(si);
+			continue;
+		}
 
 		ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 		if (packedLength < 0) {
 			free(buf);
 			scte35_splice_info_section_free(si);
-			return -1;
+			continue;
 		}
+		scte35_splice_info_section_free(si);
 
 		results->splice_entry[i] = buf;
 		results->splice_size[i] = packedLength;
-		scte35_splice_info_section_free(si);
 	}
 	results->num_splices = num_splices;
 
@@ -579,6 +603,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	assert(si->private_indicator == 0);
 
 	uint32_t v = klbs_read_bits(bs, 2); /* Reserved */
+	assert(v == 0x3);
 
 	//
 	si->section_length = klbs_read_bits(bs, 12);
@@ -710,7 +735,8 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
-	free(s->splice_descriptor);
+	if (s->splice_descriptor)
+		free(s->splice_descriptor);
 	free(s);
 }
 
