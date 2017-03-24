@@ -108,6 +108,55 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 	return 0;
 }
 
+static int scte35_append_dtmf(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_DTMF_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->dtmf_data.pre_roll_time = sd->dtmf_data.preroll;
+	op->dtmf_data.dtmf_length = sd->dtmf_data.dtmf_count;
+	if (op->dtmf_data.dtmf_length > 8)
+		op->dtmf_data.dtmf_length = 8;
+	for (int i = 0; i < op->dtmf_data.dtmf_length; i++) {
+		op->dtmf_data.dtmf_char[i] = sd->dtmf_data.dtmf_char[i];
+	}
+
+	return 0;
+}
+
+static int scte35_append_segmentation(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	struct segmentation_descriptor_request_data *seg;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_SEGMENTATION_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+	seg = &op->segmentation_data;
+
+	seg->event_id = sd->seg_data.event_id;
+	seg->event_cancel_indicator = sd->seg_data.event_cancel_indicator;
+	seg->delivery_not_restricted_flag = sd->seg_data.delivery_not_restricted_flag;
+	seg->web_delivery_allowed_flag = sd->seg_data.web_delivery_allowed_flag;
+	seg->no_regional_blackout_flag = sd->seg_data.no_regional_blackout_flag;
+	seg->archive_allowed_flag = sd->seg_data.archive_allowed_flag;
+	seg->device_restrictions = sd->seg_data.device_restrictions;
+	seg->duration = sd->seg_data.segmentation_duration;
+	seg->upid_type = sd->seg_data.upid_type;
+	seg->upid_length = sd->seg_data.upid_length;
+	for (int i = 0; i < seg->upid_length; i++)
+		seg->upid[i] = sd->seg_data.upid[i];
+	seg->type_id = sd->seg_data.type_id;
+	seg->segment_num = sd->seg_data.segment_num;
+	seg->segments_expected = sd->seg_data.segments_expected;
+
+	return 0;
+}
 
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
@@ -139,7 +188,27 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 		return -1;
 	}
 
-	/* FIXME: loop through descriptors and create an MOM Op for each */
+	for (int i = 0; i < s->descriptor_loop_count; i++) {
+		struct splice_descriptor *sd = s->descriptors[i];
+		switch(sd->splice_descriptor_tag) {
+		case SCTE35_AVAIL_DESCRIPTOR:
+			/* FIXME */
+			break;
+		case SCTE35_DTMF_DESCRIPTOR:
+			scte35_append_dtmf(sd, pkt);
+			break;
+		case SCTE35_SEGMENTATION_DESCRIPTOR:
+			scte35_append_segmentation(sd, pkt);
+			break;
+		case SCTE35_TIME_DESCRIPTOR:
+			/* FIXME */
+			break;
+		default:
+			fprintf(stderr, "Cannot create SCTE-104 Op for descriptor 0x%02x\n",
+				sd->splice_descriptor_tag);
+		}
+
+	}
 
 	/* Serialize the Multiple Operation Message out to a VANC array */
 	ret = convert_SCTE_104_to_packetBytes(pkt, buf, byteCount);
