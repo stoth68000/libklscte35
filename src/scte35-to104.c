@@ -173,6 +173,20 @@ static int scte35_append_segmentation(struct splice_descriptor *sd, struct packe
 	return 0;
 }
 
+static int scte35_append_tier(struct scte35_splice_info_section_s *s, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_TIER_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->tier_data.tier_data = s->tier;
+
+	return 0;
+}
+
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
 	struct packet_scte_104_s *pkt;
@@ -201,6 +215,13 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
 			s->splice_command_type);
 		return -1;
+	}
+
+	/* The tier field is a bit unusual, because we need to create an extra MOM Operation
+	   based on the tier value in the splice_info section, as opposed to the presence of a
+	   splice descriptor. */
+	if (s->tier != 0x0fff) {
+		scte35_append_tier(s, pkt);
 	}
 
 	for (int i = 0; i < s->descriptor_loop_count; i++) {
