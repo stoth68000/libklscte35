@@ -213,6 +213,48 @@ static int scte35_append_104_dtmf(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
+static int scte35_append_104_avail(struct packet_scte_104_s *pkt, int momOpNumber,
+				   struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct scte35_splice_info_section_s *si;
+	struct splice_descriptor *sd;
+	int ret, i;
+
+	/* Find the most recent splice to append the descriptor to */
+	for (i = *outSpliceNum - 1; i >= 0; i--) {
+		si = splices[i];
+		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+			break;
+		}
+	}
+
+	if (i < 0) {
+		/* There was no splice earlier in the MOM to append to */
+		return -1;
+	}
+
+	/* We need to create an SCTE-35 descriptor for each Avail listed in the
+	   MOM Operation */
+	for (int j = 0; j < op->avail_descriptor_data.num_provider_avails; j++) {
+		if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
+			return -1;
+		}
+
+		ret = alloc_SCTE_35_splice_descriptor(SCTE35_AVAIL_DESCRIPTOR, &sd);
+		if (ret != 0)
+			return -1;
+
+		sd->identifier = 0x43554549; /* CUEI */
+		sd->avail_data.provider_avail_id = op->avail_descriptor_data.provider_avail_id[j];
+
+		si->descriptors[si->descriptor_loop_count++] = sd;
+	}
+
+	return 0;
+}
+
 static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int momOpNumber,
 					  struct scte35_splice_info_section_s *splices[],
 					  int *outSpliceNum)
@@ -341,6 +383,9 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			break;
 		case MO_INSERT_DTMF_REQUEST_DATA:
 			scte35_append_104_dtmf(pkt, i, splices, &num_splices);
+			break;
+		case MO_INSERT_AVAIL_DESCRIPTOR_REQUEST_DATA:
+			scte35_append_104_avail(pkt, i, splices, &num_splices);
 			break;
 		case MO_INSERT_SEGMENTATION_REQUEST_DATA:
 			scte35_append_104_segmentation(pkt, i, splices, &num_splices);
