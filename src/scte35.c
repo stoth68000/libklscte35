@@ -483,9 +483,8 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 
 	si->table_id = SCTE35_TABLE_ID;
 	si->splice_command_type = command_type;
-	si->tier = 0xFFF; /* We don't support tiers. So the spec says value 0xFFF will be passed down stream and
-			   * ignored by any equipment. So, lets pass a value to be ignored.
-			   */
+	si->tier = 0xFFF; /* Set default tier.  This may be modified when converting
+			     from SCTE-104 via the insert_tier_data() MOM Operation */
 
 	return si;
 }
