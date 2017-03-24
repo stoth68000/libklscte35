@@ -33,6 +33,10 @@
 #include "klbitstream_readwriter.h"
 #include "crc32.h"
 
+/* Forward declarations */
+int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
+int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
+
 #define dprintf(level, fmt, arg...) \
 do {\
   if (ctx->verbose >= level) printf(fmt, ## arg); \
@@ -240,6 +244,62 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	SHOW_LINE_U32("", s->crc_32_is_valid);
 }
 
+/* Take the raw descriptor bytes and convert into parseable structs */
+ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_t *desc, uint32_t descLengthBytes)
+{
+	uint8_t buf[255];
+	struct splice_descriptor *sd;
+	unsigned int bytesRead = 0;
+	int ret;
+#if 0
+	printf("SCTE-35 descriptors:\n");
+	for (size_t i = 0; i < descLengthBytes; i++)
+		printf("%02x ", desc[i]);
+	printf("\n");
+#endif
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_read_set_buffer(bs, desc, descLengthBytes);
+
+	while (bytesRead < descLengthBytes) {
+		/* SCTE 35 Section 10.2, Table 16 */
+		buf[0] = klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+		buf[1] = klbs_read_bits(bs, 8); /* Descriptor Length */
+		for (int i = 0; i < buf[1]; i++) {
+			buf[i+2] = klbs_read_bits(bs, 8); /* Identifier + Private Bytes */
+		}
+
+		ret = alloc_SCTE_35_splice_descriptor(buf[0], &sd);
+		if (ret != 0)
+			break;
+
+		switch (buf[0]) {
+		case SCTE35_DTMF_DESCRIPTOR:
+			ret = scte35_parse_dtmf(sd, buf, buf[1] + 2);
+			break;
+		case SCTE35_SEGMENTATION_DESCRIPTOR:
+			ret = scte35_parse_segmentation(sd, buf, buf[1] + 2);
+			break;
+		default:
+			fprintf(stderr, "Unkknown SCTE-35 descriptor tag: %02x\n", buf[0]);
+			ret = -1;
+			break;
+		}
+
+		if (ret == 0) {
+			si->descriptors[si->descriptor_loop_count++] = sd;
+		} else {
+			free(sd);
+		}
+
+		bytesRead += buf[1] + 2;
+	}
+
+	klbs_free(bs);
+
+	return 0;
+
+}
+
 ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si, uint8_t *src, uint32_t srcLengthBytes)
 {
 	uint32_t v;
@@ -359,6 +419,8 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		for (int i = 0; i < si->descriptor_loop_length; i++) {
 			si->splice_descriptor[i] = klbs_read_bits(bs, 8);
 		}
+		scte35_parse_descriptors(si, si->splice_descriptor,
+					 si->descriptor_loop_length);
 	}
 
 	/* We don't support encryption so we dont need alignment stuffing */
@@ -457,6 +519,26 @@ int scte35_append_dtmf(struct scte35_splice_info_section_s *si, struct splice_de
 	return 0;
 }
 
+int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buf, bufLength);
+
+	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+	klbs_read_bits(bs, 8); /* Descriptor Length */
+
+	desc->identifier = klbs_read_bits(bs, 32);
+	desc->dtmf_data.preroll = klbs_read_bits(bs, 8);
+	desc->dtmf_data.dtmf_count = klbs_read_bits(bs, 3);
+	klbs_read_bits(bs, 5); /* Reserved */
+
+	for (int i = 0; i < desc->dtmf_data.dtmf_count; i++) {
+		desc->dtmf_data.dtmf_char[i] = 	klbs_read_bits(bs, 8);
+	}
+
+	return 0;
+}
+
 int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
 {
 	struct klbs_context_s *bs = klbs_alloc();
@@ -512,6 +594,54 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 
 	klbs_free(bs);
+
+	return 0;
+}
+
+int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
+{
+	struct splice_descriptor_segmentation *seg = &desc->seg_data;
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buf, bufLength);
+
+	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+	klbs_read_bits(bs, 8); /* Descriptor Length */
+
+	desc->identifier = klbs_read_bits(bs, 32);
+	seg->event_id = klbs_read_bits(bs, 32);
+	seg->event_cancel_indicator = klbs_read_bits(bs, 1);
+	klbs_read_bits(bs, 7); /* Reserved */
+
+	if (seg->event_cancel_indicator == 0) {
+		klbs_read_bits(bs, 1); /* Program Segmentation Flag */
+		seg->segmentation_duration = klbs_read_bits(bs, 1);
+		seg->delivery_not_restricted_flag = klbs_read_bits(bs, 1);
+		if (seg->delivery_not_restricted_flag == 0) {
+			seg->web_delivery_allowed_flag = klbs_read_bits(bs, 1);
+			seg->no_regional_blackout_flag = klbs_read_bits(bs, 1);
+			seg->archive_allowed_flag = klbs_read_bits(bs, 1);
+			seg->device_restrictions =  klbs_read_bits(bs, 2);
+		} else {
+			klbs_read_bits(bs, 5); /* Reserved */
+		}
+		if (0) { /* Program Segmentation Flag not set*/
+			/* FIXME: Component mode not currently supported */
+		}
+		if (seg->segmentation_duration) {
+			seg->segmentation_duration = klbs_read_bits(bs, 40);
+		}
+		seg->upid_type = klbs_read_bits(bs, 8);
+		seg->upid_length = klbs_read_bits(bs, 8);
+		for (int i = 0; i < seg->upid_length; i++) {
+			seg->upid[i] = klbs_read_bits(bs, 8);
+		}
+		seg->type_id = klbs_read_bits(bs, 8);
+		seg->segment_num = klbs_read_bits(bs, 8);
+		seg->segments_expected = klbs_read_bits(bs, 8);
+		if (seg->type_id == 0x34 || seg->type_id == 0x36) {
+			/* FIXME: Sub segment num */
+		}
+	}
 
 	return 0;
 }
