@@ -662,6 +662,13 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 		case SCTE35_SEGMENTATION_DESCRIPTOR:
 			ret = scte35_append_segmentation(si, si->descriptors[i]);
 			break;
+		case SCTE35_AVAIL_DESCRIPTOR:
+		case SCTE35_TIME_DESCRIPTOR:
+			/* FIXME */
+			fprintf(stderr, "Unsupported SCTE-35 descriptor received: %02x\n",
+				si->descriptors[i]->splice_descriptor_tag);
+			ret = -1;
+			break;
 		default:
 			/* If it's not one of the known types, it's a unknown/proprietary
 			   descriptor */
