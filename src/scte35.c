@@ -34,6 +34,7 @@
 #include "crc32.h"
 
 /* Forward declarations */
+int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 
@@ -273,6 +274,9 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			break;
 
 		switch (buf[0]) {
+		case SCTE35_AVAIL_DESCRIPTOR:
+			ret = scte35_parse_avail(sd, buf, buf[1] + 2);
+			break;
 		case SCTE35_DTMF_DESCRIPTOR:
 			ret = scte35_parse_dtmf(sd, buf, buf[1] + 2);
 			break;
@@ -487,6 +491,46 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 			     from SCTE-104 via the insert_tier_data() MOM Operation */
 
 	return si;
+}
+
+int scte35_append_avail(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	unsigned char buffer[256];
+
+	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
+	klbs_write_bits(bs, 0x00, 8);
+	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
+	klbs_write_bits(bs, desc->identifier, 32);
+	klbs_write_bits(bs, desc->avail_data.provider_avail_id, 32);
+	buffer[1] = klbs_get_byte_count(bs) - 2;
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
+	si->descriptor_loop_length += klbs_get_byte_count(bs);
+
+	klbs_write_buffer_complete(bs);
+	klbs_free(bs);
+
+	return 0;
+}
+
+int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buf, bufLength);
+
+	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+	klbs_read_bits(bs, 8); /* Descriptor Length */
+
+	desc->identifier = klbs_read_bits(bs, 32);
+	desc->avail_data.provider_avail_id = klbs_read_bits(bs, 32);
+
+	klbs_free(bs);
+
+	return 0;
 }
 
 int scte35_append_dtmf(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
@@ -785,13 +829,15 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	si->descriptor_loop_length = 0;
 	for (int i = 0; i < si->descriptor_loop_count; i++) {
 		switch(si->descriptors[i]->splice_descriptor_tag) {
+		case SCTE35_AVAIL_DESCRIPTOR:
+			ret = scte35_append_avail(si, si->descriptors[i]);
+			break;
 		case SCTE35_DTMF_DESCRIPTOR:
 			ret = scte35_append_dtmf(si, si->descriptors[i]);
 			break;
 		case SCTE35_SEGMENTATION_DESCRIPTOR:
 			ret = scte35_append_segmentation(si, si->descriptors[i]);
 			break;
-		case SCTE35_AVAIL_DESCRIPTOR:
 		case SCTE35_TIME_DESCRIPTOR:
 			/* FIXME */
 			fprintf(stderr, "Unsupported SCTE-35 descriptor received: %02x\n",
