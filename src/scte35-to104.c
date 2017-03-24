@@ -128,6 +128,21 @@ static int scte35_append_dtmf(struct splice_descriptor *sd, struct packet_scte_1
 	return 0;
 }
 
+static int scte35_append_avail(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_AVAIL_DESCRIPTOR_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->avail_descriptor_data.num_provider_avails = 1;
+	op->avail_descriptor_data.provider_avail_id[0] = sd->avail_data.provider_avail_id;
+
+	return 0;
+}
+
 static int scte35_append_segmentation(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
 {
 	struct multiple_operation_message_operation *op;
@@ -192,7 +207,7 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 		struct splice_descriptor *sd = s->descriptors[i];
 		switch(sd->splice_descriptor_tag) {
 		case SCTE35_AVAIL_DESCRIPTOR:
-			/* FIXME */
+			scte35_append_avail(sd, pkt);
 			break;
 		case SCTE35_DTMF_DESCRIPTOR:
 			scte35_append_dtmf(sd, pkt);
