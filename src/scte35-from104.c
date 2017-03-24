@@ -390,6 +390,9 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 		case MO_INSERT_SEGMENTATION_REQUEST_DATA:
 			scte35_append_104_segmentation(pkt, i, splices, &num_splices);
 			break;
+		case MO_PROPRIETARY_COMMAND_REQUEST_DATA:
+			/* FIXME */
+			break;
 		case MO_INSERT_TIER_DATA:
 			scte35_append_104_tier(pkt, i, splices, &num_splices);
 			break;
