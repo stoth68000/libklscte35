@@ -284,7 +284,7 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			ret = scte35_parse_segmentation(sd, buf, buf[1] + 2);
 			break;
 		default:
-			fprintf(stderr, "Unkknown SCTE-35 descriptor tag: %02x\n", buf[0]);
+			fprintf(stderr, "Unknown SCTE-35 descriptor tag: %02x\n", buf[0]);
 			ret = -1;
 			break;
 		}
