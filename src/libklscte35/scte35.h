@@ -179,6 +179,14 @@ struct scte35_splice_insert_s
 	uint8_t  avails_expected;
 };
 
+struct scte35_splice_private_s
+{
+	uint32_t identifier;
+	uint8_t private_length;
+	uint8_t private_byte[255];
+};
+
+
 /**
  * @brief       TODO - Brief description goes here.
  */
@@ -200,6 +208,7 @@ struct scte35_splice_info_section_s
 		struct scte35_splice_null_s splice_null;
 		struct scte35_splice_insert_s splice_insert;
 		struct scte35_splice_time_s time_signal;
+		struct scte35_splice_private_s private_command;
 	};
 
 	uint16_t descriptor_loop_count;

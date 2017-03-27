@@ -407,9 +407,13 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		assert(0);
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
-		/* TODO: Not supported */
-		assert(0);
+		si->private_command.identifier = klbs_read_bits(bs, 32);
+		si->private_command.private_length = si->splice_command_length - 4;
+		for (int i = 0; i < si->private_command.private_length; i++) {
+			si->private_command.private_byte[i] = klbs_read_bits(bs, 8);
+		}
 	}
+
 	int posb = klbs_get_byte_count(bs);
 	si->splice_command_length = posb - posa;
 
@@ -826,8 +830,10 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 		assert(0);
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
-		/* TODO: Not supported */
-		assert(0);
+		klbs_write_bits(bs, si->private_command.identifier, 32);
+		for (int i = 0; i < si->private_command.private_length; i++) {
+			klbs_write_bits(bs, si->private_command.private_byte[i], 8);
+		}
 	}
 	int posb = klbs_get_byte_count(bs);
 	si->splice_command_length = posb - posa;
