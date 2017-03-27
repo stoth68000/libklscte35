@@ -45,6 +45,16 @@ extern "C" {
 
 #define SCTE35_TABLE_ID 0xFC
 
+/* Maximum number of extra descriptors that can be associated with an SCTE-35
+   splice section */
+#define SCTE35_MAX_DESCRIPTORS 64
+
+/* SCTE-35 Sec 10.1, Table 15 */
+#define SCTE35_AVAIL_DESCRIPTOR 0x00
+#define SCTE35_DTMF_DESCRIPTOR 0x01
+#define SCTE35_SEGMENTATION_DESCRIPTOR 0x02
+#define SCTE35_TIME_DESCRIPTOR 0x03
+
 /**
  * @brief	TODO - Brief description goes here.
  */
@@ -52,6 +62,72 @@ struct scte35_break_duration_s
 {
 	uint8_t  auto_return;
 	uint64_t duration;
+};
+
+/* SCTE-35 Sec 10.3.1 */
+struct splice_descriptor_avail
+{
+	uint32_t provider_avail_id;
+};
+
+/* SCTE-35 Sec 10.3.2 */
+struct splice_descriptor_dtmf
+{
+	uint8_t preroll;
+	uint8_t dtmf_count;
+	uint8_t dtmf_char[8];
+};
+
+/* SCTE-35 Sec 10.3.3 */
+struct splice_descriptor_segmentation
+{
+	uint32_t event_id;
+	uint8_t event_cancel_indicator;
+	uint8_t program_segmentation_flag;
+	uint8_t segmentation_duration_flag;
+	uint8_t delivery_not_restricted_flag;
+	uint8_t web_delivery_allowed_flag;
+	uint8_t no_regional_blackout_flag;
+	uint8_t archive_allowed_flag;
+	uint8_t device_restrictions;
+	uint64_t segmentation_duration;
+	uint8_t upid_type;
+	uint8_t upid_length;
+	uint8_t upid[255];
+	uint8_t type_id;
+	uint8_t segment_num;
+	uint8_t segments_expected;
+	uint8_t sub_segment_num;
+	uint8_t sub_segments_expected;
+};
+
+/* SCTE-35 Sec 10.3.4 */
+struct splice_descriptor_time
+{
+	uint64_t TAI_seconds;
+	uint32_t TAI_ns;
+	uint16_t UTC_offset;
+};
+
+/* Used for protocol extensions (e.g. arbitrary/new descriptors not in current spec) */
+struct splice_descriptor_arbitrary
+{
+	uint8_t descriptor_data_length;
+	uint8_t descriptor_data[255];
+};
+
+
+struct splice_descriptor {
+	uint8_t splice_descriptor_tag;
+	uint8_t descriptor_length;
+	uint32_t identifier;
+	union {
+		struct splice_descriptor_avail avail_data;
+		struct splice_descriptor_dtmf dtmf_data;
+		struct splice_descriptor_segmentation seg_data;
+		struct splice_descriptor_time time_data;
+		struct splice_descriptor_arbitrary extra_data;
+	};
 };
 
 /**
@@ -105,6 +181,14 @@ struct scte35_splice_insert_s
 	uint8_t  avails_expected;
 };
 
+struct scte35_splice_private_s
+{
+	uint32_t identifier;
+	uint8_t private_length;
+	uint8_t private_byte[255];
+};
+
+
 /**
  * @brief       TODO - Brief description goes here.
  */
@@ -126,9 +210,13 @@ struct scte35_splice_info_section_s
 		struct scte35_splice_null_s splice_null;
 		struct scte35_splice_insert_s splice_insert;
 		struct scte35_splice_time_s time_signal;
+		struct scte35_splice_private_s private_command;
 	};
 
-	/* We don't support descriptor parsing. */
+	uint16_t descriptor_loop_count;
+	struct splice_descriptor *descriptors[SCTE35_MAX_DESCRIPTORS];
+
+	/* Raw data (for debugging/reference only) */
 	uint16_t descriptor_loop_length;
 	uint8_t  *splice_descriptor;
 
@@ -259,6 +347,8 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
  * @return	"Reserved" or a valid description. A valid string is guaranteed to be returned.
  */
 const char *scte35_description_command_type(uint32_t command_type);
+
+int alloc_SCTE_35_splice_descriptor(uint8_t tag, struct splice_descriptor **desc);
 
 #ifdef __cplusplus
 };
