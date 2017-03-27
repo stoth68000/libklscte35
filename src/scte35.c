@@ -507,7 +507,7 @@ int scte35_append_avail(struct scte35_splice_info_section_s *si, struct splice_d
 	unsigned char buffer[256];
 
 	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
-	klbs_write_bits(bs, 0x00, 8);
+	klbs_write_bits(bs, SCTE35_AVAIL_DESCRIPTOR, 8);
 	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
 	klbs_write_bits(bs, desc->identifier, 32);
 	klbs_write_bits(bs, desc->avail_data.provider_avail_id, 32);
@@ -547,7 +547,7 @@ int scte35_append_dtmf(struct scte35_splice_info_section_s *si, struct splice_de
 	unsigned char buffer[256];
 
 	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
-	klbs_write_bits(bs, 0x01, 8);
+	klbs_write_bits(bs, SCTE35_DTMF_DESCRIPTOR, 8);
 	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
 	klbs_write_bits(bs, desc->identifier, 32);
 	klbs_write_bits(bs, desc->dtmf_data.preroll, 8);
@@ -597,7 +597,7 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	unsigned char buffer[256];
 
 	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
-	klbs_write_bits(bs, 0x02, 8); /* Splice Descriptor Tag */
+	klbs_write_bits(bs, SCTE35_SEGMENTATION_DESCRIPTOR, 8); /* Splice Descriptor Tag */
 	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
 	klbs_write_bits(bs, desc->identifier, 32);
 	klbs_write_bits(bs, seg->event_id, 32);
