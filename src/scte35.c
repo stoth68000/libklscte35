@@ -37,6 +37,7 @@
 int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
+int scte35_parse_time(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_descriptor(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 
 #define dprintf(level, fmt, arg...) \
@@ -283,6 +284,9 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			break;
 		case SCTE35_SEGMENTATION_DESCRIPTOR:
 			ret = scte35_parse_segmentation(sd, buf, buf[1] + 2);
+			break;
+		case SCTE35_TIME_DESCRIPTOR:
+			ret = scte35_parse_time(sd, buf, buf[1] + 2);
 			break;
 		default:
 			ret = scte35_parse_descriptor(sd, buf, buf[1] + 2);
@@ -693,6 +697,50 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 	return 0;
 }
 
+int scte35_append_time(struct scte35_splice_info_section_s *si, struct splice_descriptor *desc)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	unsigned char buffer[256];
+
+	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
+	klbs_write_bits(bs, SCTE35_TIME_DESCRIPTOR, 8);
+	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
+	klbs_write_bits(bs, desc->identifier, 32);
+	klbs_write_bits(bs, desc->time_data.TAI_seconds, 48);
+	klbs_write_bits(bs, desc->time_data.TAI_ns, 32);
+	klbs_write_bits(bs, desc->time_data.UTC_offset, 16);
+	buffer[1] = klbs_get_byte_count(bs) - 2;
+
+	/* Append to splice_descriptor (creating if not already allocated) */
+	si->splice_descriptor = realloc(si->splice_descriptor,
+					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
+	si->descriptor_loop_length += klbs_get_byte_count(bs);
+
+	klbs_write_buffer_complete(bs);
+	klbs_free(bs);
+
+	return 0;
+}
+
+int scte35_parse_time(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
+{
+	struct klbs_context_s *bs = klbs_alloc();
+	klbs_write_set_buffer(bs, buf, bufLength);
+
+	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+	klbs_read_bits(bs, 8); /* Descriptor Length */
+
+	desc->identifier = klbs_read_bits(bs, 32);
+	desc->time_data.TAI_seconds = klbs_read_bits(bs, 48);
+	desc->time_data.TAI_ns = klbs_read_bits(bs, 32);
+	desc->time_data.UTC_offset = klbs_read_bits(bs, 16);
+
+	klbs_free(bs);
+
+	return 0;
+}
+
 /* Generic handling for unrecognized descriptors */
 int scte35_parse_descriptor(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
 {
@@ -856,10 +904,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 			ret = scte35_append_segmentation(si, si->descriptors[i]);
 			break;
 		case SCTE35_TIME_DESCRIPTOR:
-			/* FIXME */
-			fprintf(stderr, "Unsupported SCTE-35 descriptor received: %02x\n",
-				si->descriptors[i]->splice_descriptor_tag);
-			ret = -1;
+			ret = scte35_append_time(si, si->descriptors[i]);
 			break;
 		default:
 			/* If it's not one of the known types, it's a unknown/proprietary

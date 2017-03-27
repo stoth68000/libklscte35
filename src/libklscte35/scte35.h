@@ -104,7 +104,9 @@ struct splice_descriptor_segmentation
 /* SCTE-35 Sec 10.3.4 */
 struct splice_descriptor_time
 {
-	/* FIXME */
+	uint64_t TAI_seconds;
+	uint32_t TAI_ns;
+	uint16_t UTC_offset;
 };
 
 /* Used for protocol extensions (e.g. arbitrary/new descriptors not in current spec) */
