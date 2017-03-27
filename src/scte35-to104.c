@@ -108,6 +108,24 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 	return 0;
 }
 
+static int scte35_append_descriptor(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_DESCRIPTOR_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->descriptor_data.descriptor_count = 1;
+	op->descriptor_data.total_length = sd->extra_data.descriptor_data_length;
+	for (int i = 0; i < op->descriptor_data.total_length; i++) {
+		op->descriptor_data.descriptor_bytes[i] = sd->extra_data.descriptor_data[i];
+	}
+
+	return 0;
+}
+
 static int scte35_append_dtmf(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
 {
 	struct multiple_operation_message_operation *op;
@@ -240,8 +258,10 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 			/* FIXME */
 			break;
 		default:
-			fprintf(stderr, "Cannot create SCTE-104 Op for descriptor 0x%02x\n",
-				sd->splice_descriptor_tag);
+			/* Any SCTE-35 descriptor we don't recognize should be pushed
+			   out over SCTE-104 using insert_descriptor_request */
+			scte35_append_descriptor(sd, pkt);
+			break;
 		}
 
 	}

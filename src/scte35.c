@@ -37,6 +37,7 @@
 int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
+int scte35_parse_descriptor(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength);
 
 #define dprintf(level, fmt, arg...) \
 do {\
@@ -284,8 +285,7 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			ret = scte35_parse_segmentation(sd, buf, buf[1] + 2);
 			break;
 		default:
-			fprintf(stderr, "Unknown SCTE-35 descriptor tag: %02x\n", buf[0]);
-			ret = -1;
+			ret = scte35_parse_descriptor(sd, buf, buf[1] + 2);
 			break;
 		}
 
@@ -685,6 +685,17 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 			/* FIXME: Sub segment num */
 		}
 	}
+
+	return 0;
+}
+
+/* Generic handling for unrecognized descriptors */
+int scte35_parse_descriptor(struct splice_descriptor *desc, uint8_t *buf, unsigned int bufLength)
+{
+	struct splice_descriptor_arbitrary *arb = &desc->extra_data;
+
+	arb->descriptor_data_length = bufLength;
+	memcpy(arb->descriptor_data, buf, bufLength);
 
 	return 0;
 }
