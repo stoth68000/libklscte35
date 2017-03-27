@@ -176,18 +176,14 @@ static int scte35_append_104_dtmf(struct packet_scte_104_s *pkt, int momOpNumber
 	struct splice_descriptor *sd;
 	int ret, i;
 
-	/* Find the most recent splice to append the descriptor to */
-	for (i = *outSpliceNum - 1; i >= 0; i--) {
-		si = splices[i];
-		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
-			break;
-		}
-	}
-
-	if (i < 0) {
-		/* There was no splice earlier in the MOM to append to */
+	/* The SCTE-35 spec does not indicate which splice_info section types
+	   the DTMF descriptor can be applied to (unlike other descriptors
+	   which do explicitly have such restrictions).  So allow it to be
+	   applied to any splice_info section */
+	if (*outSpliceNum == 0)
 		return -1;
-	}
+
+	si = splices[*outSpliceNum - 1];
 
 	if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
 		return -1;
@@ -222,9 +218,12 @@ static int scte35_append_104_avail(struct packet_scte_104_s *pkt, int momOpNumbe
 	struct splice_descriptor *sd;
 	int ret, i;
 
-	/* Find the most recent splice to append the descriptor to */
+	/* Find the most recent splice to append the descriptor to. */
 	for (i = *outSpliceNum - 1; i >= 0; i--) {
 		si = splices[i];
+		/*  According to SCTE-35 Sec 10.3.1, avail_descriptor() is "intended
+		    only for use with a splice_insert() command, within a splice info
+		    section" */
 		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 			break;
 		}
@@ -269,7 +268,11 @@ static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int mom
 	/* Find the most recent splice to append the descriptor to */
 	for (i = *outSpliceNum - 1; i >= 0; i--) {
 		si = splices[i];
-		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+		/* Sec 10.3.3 says "this descriptor shall only be used with the
+		   time_signal(), splice_insert(), and splice_null() commands */
+		if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL ||
+		    si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT ||
+		    si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_NULL) {
 			break;
 		}
 	}
@@ -320,20 +323,12 @@ static int scte35_append_104_tier(struct packet_scte_104_s *pkt, int momOpNumber
 	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct tier_data *tier = &op->tier_data;
 	struct scte35_splice_info_section_s *si;
-	int i;
 
-	/* Find the most recent splice to append the descriptor to */
-	for (i = *outSpliceNum - 1; i >= 0; i--) {
-		si = splices[i];
-		if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
-			break;
-		}
-	}
-
-	if (i < 0) {
-		/* There was no splice earlier in the MOM to append to */
+	/* The command to set the tier could apply to any splice_info message */
+	if (*outSpliceNum == 0)
 		return -1;
-	}
+
+	si = splices[*outSpliceNum - 1];
 
 	/* Unlike most Ops, this one modifies the properties of the splice_info,
 	   as opposed to appending a descriptor */
