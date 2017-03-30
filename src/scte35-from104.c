@@ -299,7 +299,7 @@ static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int mom
 	sd->seg_data.no_regional_blackout_flag = seg->no_regional_blackout_flag;
 	sd->seg_data.archive_allowed_flag = seg->archive_allowed_flag;
 	sd->seg_data.device_restrictions = seg->device_restrictions;
-	sd->seg_data.segmentation_duration = seg->duration;
+	sd->seg_data.segmentation_duration = seg->duration * 90000;
 	sd->seg_data.upid_type = seg->upid_type;
 	sd->seg_data.upid_length = seg->upid_length;
 	for (i = 0; i < sd->seg_data.upid_length; i++)
