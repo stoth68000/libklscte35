@@ -35,7 +35,8 @@
 #include "klbitstream_readwriter.h"
 
 static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOpNumber,
-					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+					struct scte35_splice_info_section_s *splices[],
+					int *outSpliceNum, uint64_t pts)
 {
 	struct multiple_operation_message *m = &pkt->mo_msg;
 	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
@@ -81,7 +82,10 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 	if (op->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
 	    op->sr_data.splice_insert_type == SPLICEEND_NORMAL) {
 		if (op->sr_data.pre_roll_time > 0) {
-			/* Set PTS */
+			si->splice_insert.splice_time.time_specified_flag = 1;
+			/* Pre-roll time is in ms, PTS is in 90 KHz clock */
+			si->splice_insert.splice_time.pts_time = pts
+				+ op->sr_data.pre_roll_time * 90;
 		}
 	}
 
@@ -116,8 +120,11 @@ static int scte35_generate_splicenull(struct packet_scte_104_s *pkt, int momOpNu
 }
 
 static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNumber,
-				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum,
+				      uint64_t pts)
 {
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
@@ -126,9 +133,11 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 
 	splices[(*outSpliceNum)++] = si;
 
-	si->time_signal.time_specified_flag = 1;
-	/* FIXME */
-	si->time_signal.pts_time = 0;
+	if (op->timesignal_data.pre_roll_time != 0) {
+		/* Pre-roll time is in ms, PTS is in 90 KHz clock */
+		si->time_signal.pts_time = pts + op->timesignal_data.pre_roll_time * 90;
+		si->time_signal.time_specified_flag = 1;
+	}
 
 	return 0;
 }
@@ -401,7 +410,8 @@ static int scte35_append_104_time(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
-int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results)
+int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results,
+				 uint64_t pts)
 {
 	/* See SCTE-104 Sec 8.3.1.1 Semantics of fields in splice_request_data() */
 	struct multiple_operation_message *m = &pkt->mo_msg;
@@ -428,13 +438,13 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 
 		switch(o->opID) {
 		case MO_SPLICE_REQUEST_DATA:
-			scte35_generate_spliceinsert(pkt, i, splices, &num_splices);
+			scte35_generate_spliceinsert(pkt, i, splices, &num_splices, pts);
 			break;
 		case MO_SPLICE_NULL_REQUEST_DATA:
 			scte35_generate_splicenull(pkt, i, splices, &num_splices);
 			break;
 		case MO_TIME_SIGNAL_REQUEST_DATA:
-			scte35_generate_timesignal(pkt, i, splices, &num_splices);
+			scte35_generate_timesignal(pkt, i, splices, &num_splices, pts);
 			break;
 		case MO_INSERT_DESCRIPTOR_REQUEST_DATA:
 			scte35_append_104_descriptor(pkt, i, splices, &num_splices);
