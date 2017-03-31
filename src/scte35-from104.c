@@ -299,7 +299,7 @@ static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int mom
 	sd->seg_data.no_regional_blackout_flag = seg->no_regional_blackout_flag;
 	sd->seg_data.archive_allowed_flag = seg->archive_allowed_flag;
 	sd->seg_data.device_restrictions = seg->device_restrictions;
-	sd->seg_data.segmentation_duration = seg->duration;
+	sd->seg_data.segmentation_duration = seg->duration * 90000;
 	sd->seg_data.upid_type = seg->upid_type;
 	sd->seg_data.upid_length = seg->upid_length;
 	for (i = 0; i < sd->seg_data.upid_length; i++)
@@ -337,6 +337,45 @@ static int scte35_append_104_tier(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
+static int scte35_append_104_time(struct packet_scte_104_s *pkt, int momOpNumber,
+				  struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
+{
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct time_descriptor_data *des = &op->time_data;
+	struct scte35_splice_info_section_s *si;
+	struct splice_descriptor *sd;
+	int i, ret;
+
+	/* Find the most recent splice to append the descriptor to */
+	for (i = *outSpliceNum - 1; i >= 0; i--) {
+		si = splices[i];
+		/* Sec 10.3.4 says "provides an optional extension to the splice_insert(),
+		   splice_null(), and time_signal() commands..." */
+		if (si->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL ||
+		    si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT ||
+		    si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_NULL) {
+			break;
+		}
+	}
+
+	if (i < 0) {
+		/* There was no splice earlier in the MOM to append to */
+		return -1;
+	}
+
+	ret = alloc_SCTE_35_splice_descriptor(SCTE35_TIME_DESCRIPTOR, &sd);
+	if (ret != 0)
+		return -1;
+
+	sd->time_data.TAI_seconds = des->TAI_seconds;
+	sd->time_data.TAI_ns = des->TAI_ns;
+	sd->time_data.UTC_offset = des->UTC_offset;
+
+	si->descriptors[si->descriptor_loop_count++] = sd;
+
+	return 0;
+}
 
 int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results)
 {
@@ -390,6 +429,9 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			break;
 		case MO_INSERT_TIER_DATA:
 			scte35_append_104_tier(pkt, i, splices, &num_splices);
+			break;
+		case MO_INSERT_TIME_DESCRIPTOR:
+			scte35_append_104_time(pkt, i, splices, &num_splices);
 			break;
 		default:
 			continue;
