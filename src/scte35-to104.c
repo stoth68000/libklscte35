@@ -103,7 +103,9 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 	if (ret != 0)
 		return -1;
 
-	/* FIXME: Pre-roll value */
+	if (si->time_specified_flag != 0) {
+		op->timesignal_data.pre_roll_time = (si->pts_time - pts) / 90;
+	}
 
 	return 0;
 }
