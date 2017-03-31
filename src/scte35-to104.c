@@ -207,6 +207,24 @@ static int scte35_append_tier(struct scte35_splice_info_section_s *s, struct pac
 	return 0;
 }
 
+static int scte35_append_time(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	struct time_descriptor_data *t;
+	int ret;
+
+	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_TIME_DESCRIPTOR, &op);
+	if (ret != 0)
+		return -1;
+	t = &op->time_data;
+
+	t->TAI_seconds = sd->time_data.TAI_seconds;
+	t->TAI_ns = sd->time_data.TAI_ns;
+	t->UTC_offset = sd->time_data.UTC_offset;
+
+	return 0;
+}
+
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
 	struct packet_scte_104_s *pkt;
@@ -257,7 +275,7 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 			scte35_append_segmentation(sd, pkt);
 			break;
 		case SCTE35_TIME_DESCRIPTOR:
-			/* FIXME */
+			scte35_append_time(sd, pkt);
 			break;
 		default:
 			/* Any SCTE-35 descriptor we don't recognize should be pushed
