@@ -79,7 +79,7 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 	}
 
 	if (op->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
-	    op->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE) {
+	    op->sr_data.splice_insert_type == SPLICEEND_NORMAL) {
 		if (op->sr_data.pre_roll_time > 0) {
 			/* Set PTS */
 		}
