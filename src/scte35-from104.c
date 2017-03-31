@@ -133,6 +133,30 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
+static int scte35_generate_proprietary(struct packet_scte_104_s *pkt, int momOpNumber,
+				       struct scte35_splice_info_section_s *splices[],
+				       int *outSpliceNum)
+{
+	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct scte35_splice_info_section_s *si;
+
+
+	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__PRIVATE);
+	if (!si)
+		return -1;
+
+	splices[(*outSpliceNum)++] = si;
+
+	si->private_command.identifier = op->proprietary_data.proprietary_id;
+	si->private_command.private_length = op->proprietary_data.data_length;
+	for (int i = 0; i < si->private_command.private_length; i++) {
+		si->private_command.private_byte[i] = op->proprietary_data.proprietary_data[i];
+	}
+
+	return 0;
+}
+
 static int scte35_append_104_descriptor(struct packet_scte_104_s *pkt, int momOpNumber,
 					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
@@ -425,7 +449,7 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 			scte35_append_104_segmentation(pkt, i, splices, &num_splices);
 			break;
 		case MO_PROPRIETARY_COMMAND_REQUEST_DATA:
-			/* FIXME */
+			scte35_generate_proprietary(pkt, i, splices, &num_splices);
 			break;
 		case MO_INSERT_TIER_DATA:
 			scte35_append_104_tier(pkt, i, splices, &num_splices);
