@@ -25,6 +25,10 @@
 #include <libklscte35/scte35.h>
 #include <libklvanc/vanc.h>
 
+/* Arbitrary value that can be fed to both serialization and deserialization
+   for comparison */
+#define TEST_PTS_TIME 1000000
+
 #if 1
 static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typically 16 */)
 {
@@ -65,7 +69,7 @@ static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struc
 	dump_SCTE_104(ctx, pkt);
 
 	/* Let's encode it to SCTE-35 */
-	ret = scte35_generate_from_scte104(pkt, &results);
+	ret = scte35_generate_from_scte104(pkt, &results, TEST_PTS_TIME);
 	if (ret != 0) {
 		fprintf(stderr, "Generation of SCTE-35 sections failed\n");
 	}

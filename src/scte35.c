@@ -619,7 +619,6 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 			/* FIXME: Component mode not currently supported */
 		}
 		if (seg->segmentation_duration) {
-			/* FIXME: convert to PTS??? */
 			klbs_write_bits(bs, seg->segmentation_duration, 40);
 		}
 		klbs_write_bits(bs, seg->upid_type, 8);

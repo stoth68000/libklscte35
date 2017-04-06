@@ -234,7 +234,8 @@ struct splice_entries
 	uint32_t splice_size[MAX_SPLICES];
 };
 
-int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results);
+int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results,
+				 uint64_t pts);
 
 /**
  * @brief	Go into Ad, switch away from the network.
