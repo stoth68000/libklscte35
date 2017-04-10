@@ -673,6 +673,10 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 			seg->device_restrictions =  klbs_read_bits(bs, 2);
 		} else {
 			klbs_read_bits(bs, 5); /* Reserved */
+			seg->web_delivery_allowed_flag = 1;
+			seg->no_regional_blackout_flag = 1;
+			seg->archive_allowed_flag = 1;
+			seg->device_restrictions = 0x03; /* None */
 		}
 		if (0) { /* Program Segmentation Flag not set*/
 			/* FIXME: Component mode not currently supported */
