@@ -110,6 +110,25 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 	return 0;
 }
 
+static int scte104_generate_proprietary(const struct scte35_splice_private_s *si, uint64_t pts,
+					struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_PROPRIETARY_COMMAND_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->proprietary_data.proprietary_id = si->identifier;
+	op->proprietary_data.data_length = si->private_length;
+	for (int i = 0; i < op->proprietary_data.data_length; i++) {
+		op->proprietary_data.proprietary_data[i] = si->private_byte[i];
+	}
+
+	return 0;
+}
+
 static int scte35_append_descriptor(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
 {
 	struct multiple_operation_message_operation *op;
@@ -244,6 +263,9 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 		break;
 	case SCTE35_COMMAND_TYPE__TIME_SIGNAL:
 		ret = scte104_generate_time_signal(&s->time_signal, pts, pkt);
+		break;
+	case SCTE35_COMMAND_TYPE__PRIVATE:
+		ret = scte104_generate_proprietary(&s->private_command, pts, pkt);
 		break;
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
