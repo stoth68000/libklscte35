@@ -235,10 +235,6 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	if (ret != 0)
 		return ret;
 
-	/* We support some very specific SCTE104 message types. Immediate INTO/OUT-OF messages.
-	 * Only 'insert' messages, no other message support. Return an error if we're not sure
-	 * what kind of message is being requested.
-	 */
 	switch(s->splice_command_type) {
 	case SCTE35_COMMAND_TYPE__SPLICE_INSERT:
 		ret = scte104_generate_splice_request(&s->splice_insert, pts, pkt);
