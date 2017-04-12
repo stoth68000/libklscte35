@@ -401,6 +401,7 @@ static int scte35_append_104_time(struct packet_scte_104_s *pkt, int momOpNumber
 	if (ret != 0)
 		return -1;
 
+	sd->identifier = 0x43554549; /* CUEI */
 	sd->time_data.TAI_seconds = des->TAI_seconds;
 	sd->time_data.TAI_ns = des->TAI_ns;
 	sd->time_data.UTC_offset = des->UTC_offset;

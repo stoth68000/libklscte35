@@ -200,7 +200,7 @@ static int scte35_append_segmentation(struct splice_descriptor *sd, struct packe
 	seg->no_regional_blackout_flag = sd->seg_data.no_regional_blackout_flag;
 	seg->archive_allowed_flag = sd->seg_data.archive_allowed_flag;
 	seg->device_restrictions = sd->seg_data.device_restrictions;
-	seg->duration = sd->seg_data.segmentation_duration;
+	seg->duration = sd->seg_data.segmentation_duration / 90000;
 	seg->upid_type = sd->seg_data.upid_type;
 	seg->upid_length = sd->seg_data.upid_length;
 	for (int i = 0; i < seg->upid_length; i++)
