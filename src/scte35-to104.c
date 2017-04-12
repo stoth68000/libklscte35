@@ -50,7 +50,10 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 			splice_insert_type = SPLICE_INSERT_START_IMMEDIATE;
 		} else {
 			splice_insert_type = SPLICE_INSERT_START_NORMAL;
-			preroll = (si->splice_time.pts_time - pts) / 90;
+			if (si->splice_time.pts_time > pts)
+				preroll = (si->splice_time.pts_time - pts) / 90;
+			else
+				preroll = 0;
 		}
 	} else {
 		/* Into Network */
@@ -58,7 +61,10 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 			splice_insert_type = SPLICE_INSERT_END_IMMEDIATE;
 		} else {
 			splice_insert_type = SPLICE_INSERT_END_NORMAL;
-			preroll = (si->splice_time.pts_time - pts) / 90;
+			if (si->splice_time.pts_time > pts)
+				preroll = (si->splice_time.pts_time - pts) / 90;
+			else
+				preroll = 0;
 		}
 	}
 
@@ -104,7 +110,10 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 		return -1;
 
 	if (si->time_specified_flag != 0) {
-		op->timesignal_data.pre_roll_time = (si->pts_time - pts) / 90;
+		if (si->pts_time > pts)
+			op->timesignal_data.pre_roll_time = (si->pts_time - pts) / 90;
+		else
+			op->timesignal_data.pre_roll_time = 0;
 	}
 
 	return 0;
