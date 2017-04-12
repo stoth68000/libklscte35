@@ -50,7 +50,10 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 			splice_insert_type = SPLICE_INSERT_START_IMMEDIATE;
 		} else {
 			splice_insert_type = SPLICE_INSERT_START_NORMAL;
-			preroll = (si->splice_time.pts_time - pts) / 90;
+			if (si->splice_time.pts_time > pts)
+				preroll = (si->splice_time.pts_time - pts) / 90;
+			else
+				preroll = 0;
 		}
 	} else {
 		/* Into Network */
@@ -58,7 +61,10 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 			splice_insert_type = SPLICE_INSERT_END_IMMEDIATE;
 		} else {
 			splice_insert_type = SPLICE_INSERT_END_NORMAL;
-			preroll = (si->splice_time.pts_time - pts) / 90;
+			if (si->splice_time.pts_time > pts)
+				preroll = (si->splice_time.pts_time - pts) / 90;
+			else
+				preroll = 0;
 		}
 	}
 
@@ -104,7 +110,29 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 		return -1;
 
 	if (si->time_specified_flag != 0) {
-		op->timesignal_data.pre_roll_time = (si->pts_time - pts) / 90;
+		if (si->pts_time > pts)
+			op->timesignal_data.pre_roll_time = (si->pts_time - pts) / 90;
+		else
+			op->timesignal_data.pre_roll_time = 0;
+	}
+
+	return 0;
+}
+
+static int scte104_generate_proprietary(const struct scte35_splice_private_s *si, uint64_t pts,
+					struct packet_scte_104_s *pkt)
+{
+	struct multiple_operation_message_operation *op;
+	int ret;
+
+	ret =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_PROPRIETARY_COMMAND_REQUEST_DATA, &op);
+	if (ret != 0)
+		return -1;
+
+	op->proprietary_data.proprietary_id = si->identifier;
+	op->proprietary_data.data_length = si->private_length;
+	for (int i = 0; i < op->proprietary_data.data_length; i++) {
+		op->proprietary_data.proprietary_data[i] = si->private_byte[i];
 	}
 
 	return 0;
@@ -235,10 +263,6 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	if (ret != 0)
 		return ret;
 
-	/* We support some very specific SCTE104 message types. Immediate INTO/OUT-OF messages.
-	 * Only 'insert' messages, no other message support. Return an error if we're not sure
-	 * what kind of message is being requested.
-	 */
 	switch(s->splice_command_type) {
 	case SCTE35_COMMAND_TYPE__SPLICE_INSERT:
 		ret = scte104_generate_splice_request(&s->splice_insert, pts, pkt);
@@ -248,6 +272,9 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 		break;
 	case SCTE35_COMMAND_TYPE__TIME_SIGNAL:
 		ret = scte104_generate_time_signal(&s->time_signal, pts, pkt);
+		break;
+	case SCTE35_COMMAND_TYPE__PRIVATE:
+		ret = scte104_generate_proprietary(&s->private_command, pts, pkt);
 		break;
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
