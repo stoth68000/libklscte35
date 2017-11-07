@@ -81,7 +81,8 @@ static uint8_t multi_descriptor_test1[] = {
 };
 
 #ifdef DEBUG_RENDER_104
-static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struct packet_scte_104_s *pkt)
+static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx,
+		       struct klvanc_packet_scte_104_s *pkt)
 {
 	printf("%s:%s()\n", __FILE__, __func__);
 
@@ -92,7 +93,7 @@ static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struc
 	return 0;
 }
 
-static struct vanc_callbacks_s callbacks =
+static struct klvanc_callbacks_s callbacks =
 {
 	.scte_104		= cb_SCTE_104,
 };
@@ -131,7 +132,7 @@ static int parse(uint8_t *sec, int byteCount)
 			 */
 			uint16_t *vancWords;
 			uint16_t vancWordCount;
-			ret = vanc_sdi_create_payload(0x07, 0x41, buf, byteCount, &vancWords, &vancWordCount, 10);
+			ret = klvanc_sdi_create_payload(0x07, 0x41, buf, byteCount, &vancWords, &vancWordCount, 10);
 			if (ret == 0) {
 				printf("SCTE104 in VANC: ");
 				for (int i = 0; i < vancWordCount; i++)
@@ -140,14 +141,14 @@ static int parse(uint8_t *sec, int byteCount)
 
 #ifdef DEBUG_RENDER_104
 				/* Feed it back into the VANC parser so we can decode it */
-				struct vanc_context_s *ctx;
-				if (vanc_context_create(&ctx) < 0) {
+				struct klvanc_context_s *ctx;
+				if (klvanc_context_create(&ctx) < 0) {
 					fprintf(stderr, "Error initializing library context\n");
 					exit(1);
 				}
 				ctx->verbose = 1;
 				ctx->callbacks = &callbacks;
-				int ret = vanc_packet_parse(ctx, 13, vancWords, vancWordCount);
+				int ret = klvanc_packet_parse(ctx, 13, vancWords, vancWordCount);
 #endif
 
 				free(vancWords); /* Free the allocated resource */
