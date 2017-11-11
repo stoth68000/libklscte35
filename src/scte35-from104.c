@@ -34,12 +34,12 @@
 #include "libklscte35/scte35.h"
 #include "klbitstream_readwriter.h"
 
-static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_generate_spliceinsert(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 					struct scte35_splice_info_section_s *splices[],
 					int *outSpliceNum, uint64_t pts)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
@@ -105,7 +105,7 @@ static int scte35_generate_spliceinsert(struct packet_scte_104_s *pkt, int momOp
 	return 0;
 }
 
-static int scte35_generate_splicenull(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_generate_splicenull(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
 	struct scte35_splice_info_section_s *si;
@@ -119,12 +119,12 @@ static int scte35_generate_splicenull(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
-static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_generate_timesignal(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				      struct scte35_splice_info_section_s *splices[], int *outSpliceNum,
 				      uint64_t pts)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 
 	si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
@@ -142,12 +142,12 @@ static int scte35_generate_timesignal(struct packet_scte_104_s *pkt, int momOpNu
 	return 0;
 }
 
-static int scte35_generate_proprietary(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_generate_proprietary(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				       struct scte35_splice_info_section_s *splices[],
 				       int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 
 
@@ -166,12 +166,12 @@ static int scte35_generate_proprietary(struct packet_scte_104_s *pkt, int momOpN
 	return 0;
 }
 
-static int scte35_append_104_descriptor(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_descriptor(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 					struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
-	struct insert_descriptor_request_data *des = &op->descriptor_data;
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_insert_descriptor_request_data *des = &op->descriptor_data;
 	struct scte35_splice_info_section_s *si;
 	struct splice_descriptor *sd;
 	uint8_t len;
@@ -200,11 +200,11 @@ static int scte35_append_104_descriptor(struct packet_scte_104_s *pkt, int momOp
 	return 0;
 }
 
-static int scte35_append_104_dtmf(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_dtmf(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				  struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 	struct splice_descriptor *sd;
 	int ret, i;
@@ -242,11 +242,11 @@ static int scte35_append_104_dtmf(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
-static int scte35_append_104_avail(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_avail(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				   struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
 	struct scte35_splice_info_section_s *si;
 	struct splice_descriptor *sd;
 	int ret, i;
@@ -287,13 +287,13 @@ static int scte35_append_104_avail(struct packet_scte_104_s *pkt, int momOpNumbe
 	return 0;
 }
 
-static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_segmentation(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 					  struct scte35_splice_info_section_s *splices[],
 					  int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
-	struct segmentation_descriptor_request_data *seg = &op->segmentation_data;
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_segmentation_descriptor_request_data *seg = &op->segmentation_data;
 	struct scte35_splice_info_section_s *si;
 	struct splice_descriptor *sd;
 	int ret, i;
@@ -348,13 +348,13 @@ static int scte35_append_104_segmentation(struct packet_scte_104_s *pkt, int mom
 	return 0;
 }
 
-static int scte35_append_104_tier(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_tier(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				  struct scte35_splice_info_section_s *splices[],
 				  int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
-	struct tier_data *tier = &op->tier_data;
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_tier_data *tier = &op->tier_data;
 	struct scte35_splice_info_section_s *si;
 
 	/* The command to set the tier could apply to any splice_info message */
@@ -370,12 +370,12 @@ static int scte35_append_104_tier(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
-static int scte35_append_104_time(struct packet_scte_104_s *pkt, int momOpNumber,
+static int scte35_append_104_time(struct klvanc_packet_scte_104_s *pkt, int momOpNumber,
 				  struct scte35_splice_info_section_s *splices[], int *outSpliceNum)
 {
-	struct multiple_operation_message *m = &pkt->mo_msg;
-	struct multiple_operation_message_operation *op = &m->ops[momOpNumber];
-	struct time_descriptor_data *des = &op->time_data;
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message_operation *op = &m->ops[momOpNumber];
+	struct klvanc_time_descriptor_data *des = &op->time_data;
 	struct scte35_splice_info_section_s *si;
 	struct splice_descriptor *sd;
 	int i, ret;
@@ -411,11 +411,11 @@ static int scte35_append_104_time(struct packet_scte_104_s *pkt, int momOpNumber
 	return 0;
 }
 
-int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_entries *results,
+int scte35_generate_from_scte104(struct klvanc_packet_scte_104_s *pkt, struct splice_entries *results,
 				 uint64_t pts)
 {
 	/* See SCTE-104 Sec 8.3.1.1 Semantics of fields in splice_request_data() */
-	struct multiple_operation_message *m = &pkt->mo_msg;
+	struct klvanc_multiple_operation_message *m = &pkt->mo_msg;
 	struct scte35_splice_info_section_s *splices[MAX_SPLICES];
 	int num_splices = 0;
 
@@ -427,7 +427,7 @@ int scte35_generate_from_scte104(struct packet_scte_104_s *pkt, struct splice_en
 
 	/* Iterate over each of the operations in the Multiple Operation Message */
 	for (int i = 0; i < m->num_ops; i++) {
-		struct multiple_operation_message_operation *o = &m->ops[i];
+		struct klvanc_multiple_operation_message_operation *o = &m->ops[i];
 
 		switch(o->opID) {
 		case MO_SPLICE_REQUEST_DATA:

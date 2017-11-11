@@ -31,9 +31,9 @@
 #define SPLICE_INSERT_CANCEL          0x05
 
 static int scte104_generate_splice_request(const struct scte35_splice_insert_s *si, uint64_t pts,
-					   struct packet_scte_104_s *pkt)
+					   struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	uint8_t splice_insert_type;
 	uint32_t preroll = 0;
 	uint64_t duration = 0;
@@ -85,9 +85,9 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 }
 
 static int scte104_generate_splice_null(const struct scte35_splice_null_s *si, uint64_t pts,
-					struct packet_scte_104_s *pkt)
+					struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_SPLICE_NULL_REQUEST_DATA, &op);
@@ -100,9 +100,9 @@ static int scte104_generate_splice_null(const struct scte35_splice_null_s *si, u
 }
 
 static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, uint64_t pts,
-					struct packet_scte_104_s *pkt)
+					struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_TIME_SIGNAL_REQUEST_DATA, &op);
@@ -120,9 +120,9 @@ static int scte104_generate_time_signal(const struct scte35_splice_time_s *si, u
 }
 
 static int scte104_generate_proprietary(const struct scte35_splice_private_s *si, uint64_t pts,
-					struct packet_scte_104_s *pkt)
+					struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_PROPRIETARY_COMMAND_REQUEST_DATA, &op);
@@ -138,9 +138,9 @@ static int scte104_generate_proprietary(const struct scte35_splice_private_s *si
 	return 0;
 }
 
-static int scte35_append_descriptor(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+static int scte35_append_descriptor(struct splice_descriptor *sd, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_DESCRIPTOR_REQUEST_DATA, &op);
@@ -156,9 +156,9 @@ static int scte35_append_descriptor(struct splice_descriptor *sd, struct packet_
 	return 0;
 }
 
-static int scte35_append_dtmf(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+static int scte35_append_dtmf(struct splice_descriptor *sd, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_DTMF_REQUEST_DATA, &op);
@@ -176,9 +176,9 @@ static int scte35_append_dtmf(struct splice_descriptor *sd, struct packet_scte_1
 	return 0;
 }
 
-static int scte35_append_avail(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+static int scte35_append_avail(struct splice_descriptor *sd, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_AVAIL_DESCRIPTOR_REQUEST_DATA, &op);
@@ -191,10 +191,10 @@ static int scte35_append_avail(struct splice_descriptor *sd, struct packet_scte_
 	return 0;
 }
 
-static int scte35_append_segmentation(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+static int scte35_append_segmentation(struct splice_descriptor *sd, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
-	struct segmentation_descriptor_request_data *seg;
+	struct klvanc_multiple_operation_message_operation *op;
+	struct klvanc_segmentation_descriptor_request_data *seg;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_SEGMENTATION_REQUEST_DATA, &op);
@@ -221,9 +221,9 @@ static int scte35_append_segmentation(struct splice_descriptor *sd, struct packe
 	return 0;
 }
 
-static int scte35_append_tier(struct scte35_splice_info_section_s *s, struct packet_scte_104_s *pkt)
+static int scte35_append_tier(struct scte35_splice_info_section_s *s, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
+	struct klvanc_multiple_operation_message_operation *op;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_TIER_DATA, &op);
@@ -235,10 +235,10 @@ static int scte35_append_tier(struct scte35_splice_info_section_s *s, struct pac
 	return 0;
 }
 
-static int scte35_append_time(struct splice_descriptor *sd, struct packet_scte_104_s *pkt)
+static int scte35_append_time(struct splice_descriptor *sd, struct klvanc_packet_scte_104_s *pkt)
 {
-	struct multiple_operation_message_operation *op;
-	struct time_descriptor_data *t;
+	struct klvanc_multiple_operation_message_operation *op;
+	struct klvanc_time_descriptor_data *t;
 	int ret;
 
 	ret = klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_TIME_DESCRIPTOR, &op);
@@ -255,11 +255,11 @@ static int scte35_append_time(struct splice_descriptor *sd, struct packet_scte_1
 
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
-	struct packet_scte_104_s *pkt;
+	struct klvanc_packet_scte_104_s *pkt;
 	int ret = -1;
 
 	/* Create a Multiple Operation Message SCTE-104 packet */
-	ret = alloc_SCTE_104(0xffff, &pkt);
+	ret = klvanc_alloc_SCTE_104(0xffff, &pkt);
 	if (ret != 0)
 		return ret;
 
@@ -314,6 +314,6 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	}
 
 	/* Serialize the Multiple Operation Message out to a VANC array */
-	ret = convert_SCTE_104_to_packetBytes(pkt, buf, byteCount);
+	ret = klvanc_convert_SCTE_104_to_packetBytes(pkt, buf, byteCount);
 	return ret;
 }

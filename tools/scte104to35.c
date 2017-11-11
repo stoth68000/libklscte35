@@ -57,7 +57,8 @@ unsigned char __0_vancentry[] = {
 	0x02, 0x56, 0x02, 0x4e, 0x01, 0x54, 0x02, 0x00, 0x02, 0x06
 };
 
-static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struct packet_scte_104_s *pkt)
+static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx,
+		       struct klvanc_packet_scte_104_s *pkt)
 {
 	struct splice_entries results;
 	int ret;
@@ -66,7 +67,7 @@ static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struc
 
 	/* Have the library display some debug */
 	printf("Asking libklvanc to dump a struct\n");
-	dump_SCTE_104(ctx, pkt);
+	klvanc_dump_SCTE_104(ctx, pkt);
 
 	/* Let's encode it to SCTE-35 */
 	ret = scte35_generate_from_scte104(pkt, &results, TEST_PTS_TIME);
@@ -92,12 +93,12 @@ static int cb_SCTE_104(void *callback_context, struct vanc_context_s *ctx, struc
 	return 0;
 }
 
-static struct vanc_callbacks_s callbacks = 
+static struct klvanc_callbacks_s callbacks =
 {
 	.scte_104		= cb_SCTE_104,
 };
 
-static int parse(struct vanc_context_s *ctx, uint8_t *sec, int byteCount)
+static int parse(struct klvanc_context_s *ctx, uint8_t *sec, int byteCount)
 {
 	printf("\nParsing a new SCTE104 VANC packet......\n");
 	uint16_t *arr = malloc(byteCount / 2 * sizeof(uint16_t));
@@ -108,7 +109,7 @@ static int parse(struct vanc_context_s *ctx, uint8_t *sec, int byteCount)
 		arr[i] = sec[i * 2] << 8 | sec[i * 2 + 1];
 	}
 
-	int ret = vanc_packet_parse(ctx, 13, arr, byteCount / sizeof(unsigned short));
+	int ret = klvanc_packet_parse(ctx, 13, arr, byteCount / sizeof(unsigned short));
 	free(arr);
 
 	return ret;
@@ -116,9 +117,9 @@ static int parse(struct vanc_context_s *ctx, uint8_t *sec, int byteCount)
 
 int scte104to35_main(int argc, char *argv[])
 {
-	struct vanc_context_s *ctx;
+	struct klvanc_context_s *ctx;
 
-	if (vanc_context_create(&ctx) < 0) {
+	if (klvanc_context_create(&ctx) < 0) {
 		fprintf(stderr, "Error initializing library context\n");
 		exit(1);
 	}
@@ -127,7 +128,7 @@ int scte104to35_main(int argc, char *argv[])
 
 	parse(ctx, &__0_vancentry[0], sizeof(__0_vancentry));
 
-	vanc_context_destroy(ctx);
+	klvanc_context_destroy(ctx);
 	printf("program complete.\n");
 	return 0;
 }
