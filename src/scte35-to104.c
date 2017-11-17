@@ -255,8 +255,13 @@ static int scte35_append_time(struct splice_descriptor *sd, struct klvanc_packet
 
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf, uint16_t *byteCount, uint64_t pts)
 {
+	struct klvanc_context_s *ctx;
 	struct klvanc_packet_scte_104_s *pkt;
 	int ret = -1;
+
+	ret = klvanc_context_create(&ctx);
+	if (ret != 0)
+		return ret;
 
 	/* Create a Multiple Operation Message SCTE-104 packet */
 	ret = klvanc_alloc_SCTE_104(0xffff, &pkt);
@@ -314,6 +319,9 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	}
 
 	/* Serialize the Multiple Operation Message out to a VANC array */
-	ret = klvanc_convert_SCTE_104_to_packetBytes(pkt, buf, byteCount);
+	ret = klvanc_convert_SCTE_104_to_packetBytes(ctx, pkt, buf, byteCount);
+
+	klvanc_context_destroy(ctx);
+
 	return ret;
 }
