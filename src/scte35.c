@@ -472,6 +472,8 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
 	if (s->splice_descriptor)
 		free(s->splice_descriptor);
+	for (int i = 0; i < s->descriptor_loop_count; i++)
+		free(s->descriptors[i]);
 	free(s);
 }
 
@@ -587,6 +589,8 @@ int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int
 		desc->dtmf_data.dtmf_char[i] = 	klbs_read_bits(bs, 8);
 	}
 
+	klbs_free(bs);
+	
 	return 0;
 }
 
@@ -697,6 +701,8 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 		}
 	}
 
+	klbs_free(bs);
+		
 	return 0;
 }
 
