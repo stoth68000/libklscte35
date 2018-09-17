@@ -36,6 +36,11 @@
 extern "C" {
 #endif
 
+/* Possible error return values */
+#define KLSCTE35_ERR_NOMEM 1;
+#define KLSCTE35_ERR_INVAL 2;
+#define KLSCTE35_ERR_NOTSUPPORTED 3;
+
 #define SCTE35_COMMAND_TYPE__SPLICE_NULL	0x00
 #define SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE	0x04
 #define SCTE35_COMMAND_TYPE__SPLICE_INSERT	0x05
