@@ -233,6 +233,9 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 		SHOW_LINE_U32("", s->time_signal.time_specified_flag);
 		if (s->time_signal.time_specified_flag == 1)
 			SHOW_LINE_U64("", s->time_signal.pts_time);
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
+		/* Nothing to do */
 	} else {
 		fprintf(stderr, "No dump support for command type 0x%02x, asserting\n", s->splice_command_type);
 		assert(0);
@@ -407,8 +410,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		}
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
-		/* TODO: Not supported */
-		assert(0);
+		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
 		si->private_command.identifier = klbs_read_bits(bs, 32);
@@ -877,8 +879,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 			klbs_write_bits(bs, 0xff, 7); /* Reserved */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
-		/* TODO: Not supported */
-		assert(0);
+		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
 		klbs_write_bits(bs, si->private_command.identifier, 32);
