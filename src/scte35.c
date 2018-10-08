@@ -74,7 +74,7 @@ int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t e
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	if (si == NULL)
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 1;
@@ -91,14 +91,14 @@ int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t e
 	uint8_t *buf = calloc(1, l);
 	if (!buf) {
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
 		free(buf);
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_INVAL;
 	}
 
 	*dst = buf;
@@ -115,7 +115,7 @@ int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	if (si == NULL)
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 1;
@@ -130,14 +130,14 @@ int scte35_generate_out_of_network(uint16_t uniqueProgramId, uint32_t eventId,
 	uint8_t *buf = calloc(1, l);
 	if (!buf) {
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
 		free(buf);
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_INVAL;
 	}
 
 	*dst = buf;
@@ -153,7 +153,7 @@ int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t e
 {
 	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_INSERT);
 	if (si == NULL)
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	si->splice_insert.splice_event_id = eventId;
 	si->splice_insert.splice_event_cancel_indicator = 0;
 	si->splice_insert.out_of_network_indicator = 0;
@@ -168,14 +168,14 @@ int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t e
 	uint8_t *buf = calloc(1, l);
 	if (!buf) {
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 	}
 
 	ssize_t packedLength = scte35_splice_info_section_packTo(si, buf, l);
 	if (packedLength < 0) {
 		free(buf);
 		scte35_splice_info_section_free(si);
-		return -1;
+		return -KLSCTE35_ERR_INVAL;
 	}
 
 	*dst = buf;
@@ -233,9 +233,11 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 		SHOW_LINE_U32("", s->time_signal.time_specified_flag);
 		if (s->time_signal.time_specified_flag == 1)
 			SHOW_LINE_U64("", s->time_signal.pts_time);
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
+		/* Nothing to do */
 	} else {
-		fprintf(stderr, "No dump support for command type 0x%02x, asserting\n", s->splice_command_type);
-		assert(0);
+		fprintf(stderr, "No dump support for command type 0x%02x\n", s->splice_command_type);
 	}
 
         /* We don't support descriptor parsing. */
@@ -313,28 +315,35 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	uint32_t v;
 
 	if ((!si) || (!src) || (srcLengthBytes == 0))
-		return -1;
+		return -KLSCTE35_ERR_INVAL;
 
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_read_set_buffer(bs, src, srcLengthBytes);
 
 	si->table_id = klbs_read_bits(bs, 8);
-	assert(si->table_id == SCTE35_TABLE_ID);
+	if (si->table_id != SCTE35_TABLE_ID) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	si->section_syntax_indicator = klbs_read_bits(bs, 1);
-	assert(si->section_syntax_indicator == 0);
+	if (si->section_syntax_indicator != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	si->private_indicator = klbs_read_bits(bs, 1);
-	assert(si->private_indicator == 0);
+	if (si->private_indicator != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
-#ifdef ABORT_ON_RESERVED_BITS_NOT_SET
 	v = klbs_read_bits(bs, 2); /* Reserved */
-	assert(v == 0x3);
-#else
-	klbs_read_bits(bs, 2); /* Reserved */
-#endif
+	if (v != 0x03) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
-	//
 	si->section_length = klbs_read_bits(bs, 12);
 
 	si->protocol_version = klbs_read_bits(bs, 8);
@@ -353,7 +362,8 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
-		assert(0);
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOTSUPPORTED;
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 
@@ -399,16 +409,21 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		si->time_signal.time_specified_flag = klbs_read_bits(bs, 1);
 		if (si->time_signal.time_specified_flag == 1) {
 			v = klbs_read_bits(bs, 6); /* Reserved */
-			assert(v == 0x3f);
+			if (v != 0x3f) {
+				klbs_free(bs);
+				return -KLSCTE35_ERR_INVAL;
+			}
 			si->time_signal.pts_time = klbs_read_bits(bs, 33);
 		} else {
 			v = klbs_read_bits(bs, 7); /* Reserved */
-			assert(v == 0x7f);
+			if (v != 0x7f) {
+				klbs_free(bs);
+				return -KLSCTE35_ERR_INVAL;
+			}
 		}
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
-		/* TODO: Not supported */
-		assert(0);
+		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
 		si->private_command.identifier = klbs_read_bits(bs, 32);
@@ -416,6 +431,9 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		for (int i = 0; i < si->private_command.private_length; i++) {
 			si->private_command.private_byte[i] = klbs_read_bits(bs, 8);
 		}
+	} else {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOTSUPPORTED;
 	}
 
 	int posb = klbs_get_byte_count(bs);
@@ -426,7 +444,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		si->splice_descriptor = malloc(si->descriptor_loop_length);
 		if (si->splice_descriptor == NULL) {
 			klbs_free(bs);
-			return -1;
+			return -KLSCTE35_ERR_NOMEM;
 		}
 		for (int i = 0; i < si->descriptor_loop_length; i++) {
 			si->splice_descriptor[i] = klbs_read_bits(bs, 8);
@@ -456,11 +474,14 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
 {
+	int ret;
+
 	if (*(section + 0) != SCTE35_TABLE_ID)
-		return 0;
+		return NULL;
 
 	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
-	if (scte35_splice_info_section_unpackFrom(s, section, byteCount) < 0) {
+	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
+	if (ret < 0) {
 		free(s);
 		return NULL;
 	}
@@ -486,12 +507,12 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
 	case SCTE35_COMMAND_TYPE__PRIVATE:
 		break;
 	default:
-		return 0;
+		return NULL;
 	}
 
 	struct scte35_splice_info_section_s *si = calloc(1, sizeof(*si));
 	if (!si)
-		return 0;
+		return NULL;
 
 	si->table_id = SCTE35_TABLE_ID;
 	si->splice_command_type = command_type;
@@ -784,18 +805,28 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	int ret;
 
 	if ((!si) || (!buffer) || (buffer_length_bytes < 128))
-		return -1;
+		return -KLSCTE35_ERR_INVAL;
 
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buffer, buffer_length_bytes);
 
 	klbs_write_bits(bs, si->table_id, 8);
-	assert(si->table_id == SCTE35_TABLE_ID);
+	if (si->table_id != SCTE35_TABLE_ID) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
+
 	klbs_write_bits(bs, si->section_syntax_indicator, 1);
-	assert(si->section_syntax_indicator == 0);
+	if (si->section_syntax_indicator != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	klbs_write_bits(bs, si->private_indicator, 1);
-	assert(si->private_indicator == 0);
+	if (si->private_indicator != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	klbs_write_bits(bs, 0xff, 2); /* Reserved */
 	klbs_write_bits(bs, 0, 12); /* Section length, to be filled later */
@@ -807,13 +838,22 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	 * protocol_zero, regardless.
 	 */
 	klbs_write_bits(bs, si->protocol_version, 8);
-	assert(si->protocol_version == 0);
+	if (si->protocol_version != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	klbs_write_bits(bs, si->encrypted_packet, 1);
-	assert(si->encrypted_packet == 0); /* No support */
+	if (si->encrypted_packet != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	klbs_write_bits(bs, si->encryption_algorithm, 6);
-	assert(si->encryption_algorithm == 0); /* No support */
+	if (si->encryption_algorithm != 0) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_INVAL;
+	}
 
 	klbs_write_bits(bs, si->pts_adjustment, 33);
 	klbs_write_bits(bs, si->cw_index, 8);
@@ -828,7 +868,8 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
 		/* TODO: Not supported */
-		assert(0);
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOTSUPPORTED;
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 
@@ -877,15 +918,18 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 			klbs_write_bits(bs, 0xff, 7); /* Reserved */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
-		/* TODO: Not supported */
-		assert(0);
+		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
 		klbs_write_bits(bs, si->private_command.identifier, 32);
 		for (int i = 0; i < si->private_command.private_length; i++) {
 			klbs_write_bits(bs, si->private_command.private_byte[i], 8);
 		}
+	} else {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOTSUPPORTED;
 	}
+
 	int posb = klbs_get_byte_count(bs);
 	si->splice_command_length = posb - posa;
 
@@ -952,7 +996,7 @@ int alloc_SCTE_35_splice_descriptor(uint8_t tag, struct splice_descriptor **desc
 {
 	struct splice_descriptor *sd = calloc(1, sizeof(*sd));
 	if (!sd)
-		return -1;
+		return -KLSCTE35_ERR_NOMEM;
 
 	sd->splice_descriptor_tag = tag;
 	*desc = sd;
