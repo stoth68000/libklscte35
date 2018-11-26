@@ -76,6 +76,7 @@ static int scte35_generate_spliceinsert(struct klvanc_packet_scte_104_s *pkt, in
 	default:
 		fprintf(stderr, "Unknown Splice insert type %d\n",
 			op->sr_data.splice_insert_type);
+		scte35_splice_info_section_free(si);
 		(*outSpliceNum)--;
 		return -1;
 	}
