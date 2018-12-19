@@ -321,6 +321,8 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	/* Serialize the Multiple Operation Message out to a VANC array */
 	ret = klvanc_convert_SCTE_104_to_packetBytes(ctx, pkt, buf, byteCount);
 
+	klvanc_free_SCTE_104(pkt);
+
 	klvanc_context_destroy(ctx);
 
 	return ret;
