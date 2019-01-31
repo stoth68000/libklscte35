@@ -21,7 +21,12 @@ Installing LibKLSCTE35
 ****************
 The following is a list of dependencies needed to successfully install LibKLSCTE35:
 
-* libklscte35
+* automake
+	- macOS - `brew install automake`
+* libtool
+	- macOS - `brew install libtool`
+* libklvanc
+	- macOS - [follow instructions here](https://github.com/stoth68000/libklvanc)
 
 
 ## Documentation:
