@@ -45,6 +45,9 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 	} else if (si->out_of_network_indicator == 1) {
 		/* Out of Network */
 		duration = si->duration.duration / 9000;
+		if (si->duration.duration % 9000 >= 4500)
+			duration++;
+
 		auto_return = si->duration.auto_return;
 		if (si->splice_immediate_flag == 1) {
 			splice_insert_type = SPLICE_INSERT_START_IMMEDIATE;
