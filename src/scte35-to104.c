@@ -288,6 +288,13 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	case SCTE35_COMMAND_TYPE__PRIVATE:
 		ret = scte104_generate_proprietary(&s->private_command, pts, pkt);
 		break;
+	case SCTE35_COMMAND_TYPE__BW_RESERVATION:
+		/* No equivalent command in SCTE-104, so indicate success but don't
+		   actually return a SCTE-104 message */
+		*byteCount = 0;
+		klvanc_free_SCTE_104(pkt);
+		klvanc_context_destroy(ctx);
+		return 0;
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
 			s->splice_command_type);
