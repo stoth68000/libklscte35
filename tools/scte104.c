@@ -88,7 +88,7 @@ static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx,
 
 	/* Have the library display some debug */
 	printf("Asking libklvanc to dump a struct\n");
-	dump_SCTE_104(ctx, pkt);
+	klvanc_dump_SCTE_104(ctx, pkt);
 
 	return 0;
 }
