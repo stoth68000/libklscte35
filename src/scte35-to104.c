@@ -271,6 +271,10 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	if (ret != 0)
 		return ret;
 
+	/* Compensate for any adjustments intermediate processors may have
+	   made to the PTS before using the value in any calculations */
+	pts -= s->pts_adjustment;
+
 	switch(s->splice_command_type) {
 	case SCTE35_COMMAND_TYPE__SPLICE_INSERT:
 		ret = scte104_generate_splice_request(&s->splice_insert, pts, pkt);
