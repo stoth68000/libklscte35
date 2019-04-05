@@ -555,6 +555,13 @@ int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned in
 	klbs_read_bits(bs, 8); /* Descriptor Length */
 
 	desc->identifier = klbs_read_bits(bs, 32);
+	if (desc->identifier != 0x43554549) {
+		/* The private bytes that follow are only valid if the identifier
+		   is SCTE CUEI */
+		klbs_free(bs);
+		return -1;
+	}
+
 	desc->avail_data.provider_avail_id = klbs_read_bits(bs, 32);
 
 	klbs_free(bs);
@@ -600,6 +607,13 @@ int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int
 	klbs_read_bits(bs, 8); /* Descriptor Length */
 
 	desc->identifier = klbs_read_bits(bs, 32);
+	if (desc->identifier != 0x43554549) {
+		/* The private bytes that follow are only valid if the identifier
+		   is SCTE CUEI */
+		klbs_free(bs);
+		return -1;
+	}
+
 	desc->dtmf_data.preroll = klbs_read_bits(bs, 8);
 	desc->dtmf_data.dtmf_count = klbs_read_bits(bs, 3);
 	klbs_read_bits(bs, 5); /* Reserved */
@@ -679,6 +693,13 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 	klbs_read_bits(bs, 8); /* Descriptor Length */
 
 	desc->identifier = klbs_read_bits(bs, 32);
+	if (desc->identifier != 0x43554549) {
+		/* The private bytes that follow are only valid if the identifier
+		   is SCTE CUEI */
+		klbs_free(bs);
+		return -1;
+	}
+
 	seg->event_id = klbs_read_bits(bs, 32);
 	seg->event_cancel_indicator = klbs_read_bits(bs, 1);
 	klbs_read_bits(bs, 7); /* Reserved */
@@ -756,6 +777,13 @@ int scte35_parse_time(struct splice_descriptor *desc, uint8_t *buf, unsigned int
 	klbs_read_bits(bs, 8); /* Descriptor Length */
 
 	desc->identifier = klbs_read_bits(bs, 32);
+	if (desc->identifier != 0x43554549) {
+		/* The private bytes that follow are only valid if the identifier
+		   is SCTE CUEI */
+		klbs_free(bs);
+		return -1;
+	}
+
 	desc->time_data.TAI_seconds = klbs_read_bits(bs, 48);
 	desc->time_data.TAI_ns = klbs_read_bits(bs, 32);
 	desc->time_data.UTC_offset = klbs_read_bits(bs, 16);
