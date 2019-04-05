@@ -137,6 +137,7 @@ static int parse(uint8_t *sec, int byteCount)
 			if (ret != 0) {
 				printf("Error creating SMPTE 2010 VANC payload, ret=%d\n",
 				       ret);
+				klvanc_context_destroy(ctx);
 				return -1;
 			}
 
@@ -168,12 +169,14 @@ static int parse(uint8_t *sec, int byteCount)
 				fprintf(stderr, "Error creating VANC message, ret = %d\n", ret);
 
 			free(buf); /* Free the allocated resource */
+			free(smpte2010_bytes);
 		} else {
 			fprintf(stderr, "Unable to convert SCTE35 to SCTE104, ret = %d\n", ret);
 		}
 
 		/* Free the allocated resource */
 		scte35_splice_info_section_free(s);
+		klvanc_context_destroy(ctx);
 	}
 
 	return 0;
