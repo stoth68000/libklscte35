@@ -132,6 +132,16 @@ static uint8_t bw_reservation [] = {
 	0xff, 0xff, 0xff, 0xff                          /* .... */
 };
 
+/* Segmentation descriptor with identifier other than CUEI */
+static uint8_t seg_invalid_id [] = {
+	0xfc, 0x30, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x85, 0xff, 0xff, 0xff, 0x07, 0x00, 0x16,
+	0x02, 0x14, 0x02, 0x7e, 0x85, 0xd2, 0x01, 0x3f,
+	0x42, 0xe9, 0x00, 0x9f, 0xa1, 0x74, 0x00, 0x4f,
+	0xd0, 0xba, 0x80, 0x27, 0xe8, 0x5d, 0xef, 0xdc,
+	0xaf, 0x51
+};
+
 static int parse(uint8_t *sec, int byteCount)
 {
 	printf("\nParsing a new SCTE35 section......\n");
@@ -158,7 +168,7 @@ int parse_main(int argc, char *argv[])
 	parse(&comcast_gots_test2[0], sizeof(comcast_gots_test2));
 	parse(&comcast_gots_test3[0], sizeof(comcast_gots_test3));
 	parse(&bw_reservation[0], sizeof(bw_reservation));
-
+	parse(&seg_invalid_id[0], sizeof(seg_invalid_id));
 	printf("program complete.\n");
 	return 0;
 }
