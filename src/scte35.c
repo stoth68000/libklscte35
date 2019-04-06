@@ -338,11 +338,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		return -KLSCTE35_ERR_INVAL;
 	}
 
-	v = klbs_read_bits(bs, 2); /* Reserved */
-	if (v != 0x03) {
-		klbs_free(bs);
-		return -KLSCTE35_ERR_INVAL;
-	}
+	klbs_read_bits(bs, 2); /* Reserved */
 
 	si->section_length = klbs_read_bits(bs, 12);
 
