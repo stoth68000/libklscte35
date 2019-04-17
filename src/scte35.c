@@ -56,6 +56,7 @@ static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typ
 
 const char *scte35_description_command_type(uint32_t command_type)
 {
+	/* SCTE-35:2019 Table 6 */
 	switch(command_type) {
 	case SCTE35_COMMAND_TYPE__SPLICE_NULL: return "SPLICE_NULL";
 	case SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE: return "SPLICE_SCHEDULE"; 
@@ -67,6 +68,111 @@ const char *scte35_description_command_type(uint32_t command_type)
 	}
 }
 
+static const char *scte35_description_identifier_name(uint32_t id)
+{
+	switch(id) {
+	case 0x43554549: return "SCTE"; /* CUEI */
+	default: return "Unknown";
+	}
+}
+
+static const char *scte35_description_descriptor_name(uint8_t descriptor)
+{
+	/* SCTE-35:2019 Table 15 */
+	switch(descriptor) {
+	case SCTE35_AVAIL_DESCRIPTOR: return "AVAIL";
+	case SCTE35_DTMF_DESCRIPTOR: return "DTMF";
+	case SCTE35_SEGMENTATION_DESCRIPTOR: return "SEGMENTATION";
+	case SCTE35_TIME_DESCRIPTOR: return "TIME";
+	default: return "Unknown";
+	}
+}
+
+static const char *scte35_seg_device_restrictions(uint8_t val) {
+	/* SCTE-35:2019 Table 20 */
+	switch(val) {
+	case 0x00: return "Restrict Group 0";
+	case 0x01: return "Restrict Group 1";
+	case 0x02: return "Restrict Group 2";
+	case 0x03: return "None";
+	default:   return "Unknown";
+	}
+}
+
+static const char *scte35_seg_upid_type(uint8_t upid_type) {
+	/* SCTE-35:2019 Table 21 */
+	switch(upid_type) {
+	case 0x00: return "Not Used";
+	case 0x01: return "User Defined (Deprecated)";
+	case 0x02: return "ISCI (Deprecated)";
+	case 0x03: return "Ad-ID (Advertising Digital Identification, LLC)";
+	case 0x04: return "UMID (SMPTE 330)";
+	case 0x05: return "ISAN (Deprecated)";
+	case 0x06: return "ISAN (Formerly V-ISAN)";
+	case 0x07: return "TID (Tribune Media Systems)";
+	case 0x08: return "TI (AiringID, formerly Turner ID)";
+	case 0x09: return "ADI (CableLabs)";
+	default: return "Reserved";
+	}
+}
+
+static const char *scte35_seg_type_id(uint8_t type_id) {
+	/* SCTE-35:2019 Table 22 */
+	switch(type_id) {
+	case 0x00: return "Not indicated";
+	case 0x01: return "Content Identification";
+	case 0x10: return "Program Start";
+	case 0x11: return "Program End";
+	case 0x12: return "Program Early Termination";
+	case 0x13: return "Program Breakaway";
+	case 0x14: return "Program Resumption";
+	case 0x15: return "Program Runover Planned";
+	case 0x16: return "Program Runover Unplanned";
+	case 0x17: return "Program Overlap Start";
+	case 0x18: return "Program Blackout Override";
+	case 0x19: return "Program Start - In Progress";
+	case 0x20: return "Chapter Start";
+	case 0x21: return "Chapter End";
+	case 0x22: return "Break Start";
+	case 0x23: return "Break End";
+	case 0x24: return "Opening Credit Start";
+	case 0x25: return "Opening Credit End";
+	case 0x26: return "Closing Credit Start";
+	case 0x27: return "Closing Credit End";
+	case 0x30: return "Provider Advertisement Start";
+	case 0x31: return "Provider Advertisement End";
+	case 0x32: return "Distributor Advertisement Start";
+	case 0x33: return "Distributor Advertisement End";
+	case 0x34: return "Provider Placement Opportunity Start";
+	case 0x35: return "Provider Placement Opportunity End";
+	case 0x36: return "Distributor Placement Opportunity Start";
+	case 0x37: return "Distributor Placement Opportunity End";
+	case 0x38: return "Provider Overlay Placement Opportunity Start";
+	case 0x39: return "Provider Overlay Placement Opportunity End";
+	case 0x3A: return "Distributor Overlay Placement Opportunity Start";
+	case 0x3B: return "Distributor Overlay Placement Opportunity End";
+	case 0x40: return "Unscheduled Event Start";
+	case 0x41: return "Unscheduled Event End";
+	case 0x50: return "Network Start";
+	case 0x51: return "Network End";
+	default:   return "Unknown";
+	}
+}
+
+static const char *scte35_encryption_algorithms(uint8_t val) {
+	/* SCTE-35:2019 Table 27 */
+	switch(val) {
+	case 0x00: return "No encryption";
+	case 0x01: return "DES - ECB mode";
+	case 0x02: return "DES - CBC mode";
+	case 0x03: return "Triple DES EDE3 - ECB mode";
+	default:
+		if (val >= 4 && val <= 31)
+			return "Reserved";
+		else
+			return "User Private";
+	}
+}
 
 int scte35_generate_out_of_network_duration(uint16_t uniqueProgramId, uint32_t eventId, uint32_t duration, int autoReturn,
 					    uint8_t **dst, uint32_t *dstLengthBytes, uint32_t immediate, uint16_t availNum,
@@ -196,7 +302,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	SHOW_LINE_U32("", s->section_length);
 	SHOW_LINE_U32("", s->protocol_version);
 	SHOW_LINE_U32("", s->encrypted_packet);
-	SHOW_LINE_U32("", s->encryption_algorithm);
+	SHOW_LINE_U32_SUFFIX("", s->encryption_algorithm, scte35_encryption_algorithms(s->encryption_algorithm));
 	SHOW_LINE_U64("", s->pts_adjustment);
 	SHOW_LINE_U32("", s->cw_index);
 	SHOW_LINE_U32("", s->tier);
@@ -243,6 +349,71 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
         /* We don't support descriptor parsing. */
 	SHOW_LINE_U32("", s->descriptor_loop_length);
 	hexdump(s->splice_descriptor, s->descriptor_loop_length, 16);
+
+        for (int i = 0; i < s->descriptor_loop_count; i++) {
+		struct splice_descriptor *sd = s->descriptors[i];
+		printf("Descriptor:\n");
+		SHOW_LINE_U32_SUFFIX("\t", sd->splice_descriptor_tag,
+				     scte35_description_descriptor_name(sd->splice_descriptor_tag));
+		SHOW_LINE_U32_SUFFIX("\t", sd->identifier,
+				     scte35_description_identifier_name(sd->identifier));
+		switch (sd->identifier) {
+		case 0x43554549: /* CUEI */
+			switch (sd->splice_descriptor_tag) {
+			case SCTE35_AVAIL_DESCRIPTOR:
+				SHOW_LINE_U32("\t", sd->avail_data.provider_avail_id);
+				break;
+			case SCTE35_DTMF_DESCRIPTOR:
+				SHOW_LINE_U32("\t", sd->dtmf_data.preroll);
+				SHOW_LINE_U32("\t", sd->dtmf_data.dtmf_count);
+				printf("\tsd->dtmf_data.dtmf_char = [");
+				for (int j = 0; j < sd->dtmf_data.dtmf_count; j++) {
+					printf("%c", sd->dtmf_data.dtmf_char[i]);
+				}
+				printf("]\n");
+				break;
+			case SCTE35_SEGMENTATION_DESCRIPTOR:
+				SHOW_LINE_U32("\t", sd->seg_data.event_id);
+				SHOW_LINE_U32("\t", sd->seg_data.event_cancel_indicator);
+				if (sd->seg_data.event_cancel_indicator == 0) {
+					SHOW_LINE_U32("\t", sd->seg_data.program_segmentation_flag);
+					SHOW_LINE_U32("\t", sd->seg_data.segmentation_duration_flag);
+					SHOW_LINE_U32("\t", sd->seg_data.delivery_not_restricted_flag);
+					SHOW_LINE_U32("\t", sd->seg_data.web_delivery_allowed_flag);
+					SHOW_LINE_U32("\t", sd->seg_data.no_regional_blackout_flag);
+					SHOW_LINE_U32("\t", sd->seg_data.archive_allowed_flag);
+					SHOW_LINE_U32_SUFFIX("\t", sd->seg_data.device_restrictions,
+							     scte35_seg_device_restrictions(sd->seg_data.device_restrictions));
+					if (sd->seg_data.segmentation_duration_flag) {
+						SHOW_LINE_U64("\t", sd->seg_data.segmentation_duration);
+					}
+					SHOW_LINE_U32_SUFFIX("\t", sd->seg_data.upid_type,
+							     scte35_seg_upid_type(sd->seg_data.upid_type));
+					SHOW_LINE_U32("\t", sd->seg_data.upid_length);
+					if (sd->seg_data.upid_length > 0) {
+						printf("\t");
+						hexdump(sd->seg_data.upid, sd->seg_data.upid_length, 16);
+					}
+					SHOW_LINE_U32_SUFFIX("\t", sd->seg_data.type_id,
+							     scte35_seg_type_id(sd->seg_data.type_id));
+					SHOW_LINE_U32("\t", sd->seg_data.segment_num);
+					SHOW_LINE_U32("\t", sd->seg_data.segments_expected);
+				}
+				break;
+			case SCTE35_TIME_DESCRIPTOR:
+				SHOW_LINE_U64("\t", sd->time_data.TAI_seconds);
+				SHOW_LINE_U32("\t", sd->time_data.TAI_ns);
+				SHOW_LINE_U32("\t", sd->time_data.UTC_offset);
+				break;
+			default:
+				break;
+			}
+			break;
+		default:
+			printf("\tUnknown identifier, cannot parser further\n");
+			break;
+		}
+        }
 
 	SHOW_LINE_U32("", s->e_crc_32);
 	SHOW_LINE_U32("", s->crc_32);
