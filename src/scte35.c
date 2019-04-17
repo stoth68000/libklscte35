@@ -641,7 +641,7 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	klbs_write_bits(bs, 0x7f, 7); /* Reserved */
 	if (seg->event_cancel_indicator == 0) {
 		klbs_write_bits(bs, 0x01, 1); /* Program Segmentation Flag */
-		klbs_write_bits(bs, seg->segmentation_duration ? 1 : 0, 1);
+		klbs_write_bits(bs, seg->segmentation_duration_flag ? 1 : 0, 1);
 		klbs_write_bits(bs, seg->delivery_not_restricted_flag, 1);
 		if (seg->delivery_not_restricted_flag == 0) {
 			klbs_write_bits(bs, seg->web_delivery_allowed_flag, 1);
@@ -654,7 +654,7 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 		if (0) { /* Program Segmentation Flag not set*/
 			/* FIXME: Component mode not currently supported */
 		}
-		if (seg->segmentation_duration) {
+		if (seg->segmentation_duration_flag) {
 			klbs_write_bits(bs, seg->segmentation_duration, 40);
 		}
 		klbs_write_bits(bs, seg->upid_type, 8);
@@ -706,8 +706,8 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 	klbs_read_bits(bs, 7); /* Reserved */
 
 	if (seg->event_cancel_indicator == 0) {
-		klbs_read_bits(bs, 1); /* Program Segmentation Flag */
-		seg->segmentation_duration = klbs_read_bits(bs, 1);
+		seg->program_segmentation_flag = klbs_read_bits(bs, 1);
+		seg->segmentation_duration_flag = klbs_read_bits(bs, 1);
 		seg->delivery_not_restricted_flag = klbs_read_bits(bs, 1);
 		if (seg->delivery_not_restricted_flag == 0) {
 			seg->web_delivery_allowed_flag = klbs_read_bits(bs, 1);
@@ -724,7 +724,7 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 		if (0) { /* Program Segmentation Flag not set*/
 			/* FIXME: Component mode not currently supported */
 		}
-		if (seg->segmentation_duration) {
+		if (seg->segmentation_duration_flag) {
 			seg->segmentation_duration = klbs_read_bits(bs, 40);
 		}
 		seg->upid_type = klbs_read_bits(bs, 8);
