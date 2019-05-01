@@ -45,6 +45,9 @@ static int scte104_generate_splice_request(const struct scte35_splice_insert_s *
 	} else if (si->out_of_network_indicator == 1) {
 		/* Out of Network */
 		duration = si->duration.duration / 9000;
+		if (si->duration.duration % 9000 >= 4500)
+			duration++;
+
 		auto_return = si->duration.auto_return;
 		if (si->splice_immediate_flag == 1) {
 			splice_insert_type = SPLICE_INSERT_START_IMMEDIATE;
@@ -268,6 +271,10 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	if (ret != 0)
 		return ret;
 
+	/* Compensate for any adjustments intermediate processors may have
+	   made to the PTS before using the value in any calculations */
+	pts -= s->pts_adjustment;
+
 	switch(s->splice_command_type) {
 	case SCTE35_COMMAND_TYPE__SPLICE_INSERT:
 		ret = scte104_generate_splice_request(&s->splice_insert, pts, pkt);
@@ -281,6 +288,13 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	case SCTE35_COMMAND_TYPE__PRIVATE:
 		ret = scte104_generate_proprietary(&s->private_command, pts, pkt);
 		break;
+	case SCTE35_COMMAND_TYPE__BW_RESERVATION:
+		/* No equivalent command in SCTE-104, so indicate success but don't
+		   actually return a SCTE-104 message */
+		*byteCount = 0;
+		klvanc_free_SCTE_104(pkt);
+		klvanc_context_destroy(ctx);
+		return 0;
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
 			s->splice_command_type);

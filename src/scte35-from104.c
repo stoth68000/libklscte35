@@ -88,6 +88,12 @@ static int scte35_generate_spliceinsert(struct klvanc_packet_scte_104_s *pkt, in
 			/* Pre-roll time is in ms, PTS is in 90 KHz clock */
 			si->splice_insert.splice_time.pts_time = pts
 				+ op->sr_data.pre_roll_time * 90;
+		} else {
+			/* SCTE-104:2015 Sec 9.3.1.1 states "If zero (and Component
+			   Mode is not in use) the Injector should set the
+			   splice_immediate_flag to 1 in the resulting SCTE
+			   35 [1] splice_info_section" */
+			si->splice_insert.splice_immediate_flag = 1;
 		}
 	}
 
