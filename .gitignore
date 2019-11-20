@@ -22,6 +22,5 @@ m4/
 missing
 libklscte35.la
 src/libklscte35.la
-src/libklscte35_la-scte35.lo
+src/libklscte35_la-*.lo
 doxygen/html
-libklscte35_la-crc32.lo
