@@ -385,6 +385,13 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 					SHOW_LINE_U32("\t", sd->seg_data.archive_allowed_flag);
 					SHOW_LINE_U32_SUFFIX("\t", sd->seg_data.device_restrictions,
 							     scte35_seg_device_restrictions(sd->seg_data.device_restrictions));
+					if (sd->seg_data.program_segmentation_flag == 0) {
+						SHOW_LINE_U32("\t", sd->seg_data.component_count);
+						for (int j = 0; j < sd->seg_data.component_count; j++) {
+							SHOW_LINE_U32("\t", sd->seg_data.components[j].component_tag);
+							SHOW_LINE_U64("\t", sd->seg_data.components[j].pts_offset);
+						}
+					}
 					if (sd->seg_data.segmentation_duration_flag) {
 						SHOW_LINE_U64("\t", sd->seg_data.segmentation_duration);
 					}
@@ -812,7 +819,7 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	klbs_write_bits(bs, seg->event_cancel_indicator, 1);
 	klbs_write_bits(bs, 0x7f, 7); /* Reserved */
 	if (seg->event_cancel_indicator == 0) {
-		klbs_write_bits(bs, 0x01, 1); /* Program Segmentation Flag */
+		klbs_write_bits(bs, seg->program_segmentation_flag, 1);
 		klbs_write_bits(bs, seg->segmentation_duration_flag ? 1 : 0, 1);
 		klbs_write_bits(bs, seg->delivery_not_restricted_flag, 1);
 		if (seg->delivery_not_restricted_flag == 0) {
@@ -823,7 +830,14 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 		} else {
 			klbs_write_bits(bs, 0x1f, 5); /* Reserved */
 		}
-		if (0) { /* Program Segmentation Flag not set*/
+		if (seg->program_segmentation_flag == 0) {
+			klbs_write_bits(bs, seg->component_count, 8);
+			for (int i = 0; i < seg->component_count; i++) {
+				klbs_write_bits(bs, seg->components[i].component_tag, 8);
+				klbs_write_bits(bs, 0x7f, 7); /* Reserved */
+				klbs_write_bits(bs, seg->components[i].pts_offset, 33);
+			}
+
 			/* FIXME: Component mode not currently supported */
 		}
 		if (seg->segmentation_duration_flag) {
@@ -893,8 +907,13 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 			seg->archive_allowed_flag = 1;
 			seg->device_restrictions = 0x03; /* None */
 		}
-		if (0) { /* Program Segmentation Flag not set*/
-			/* FIXME: Component mode not currently supported */
+		if (seg->program_segmentation_flag == 0) {
+			seg->component_count = klbs_read_bits(bs, 8);
+			for (int i = 0; i < seg->component_count; i++) {
+				seg->components[i].component_tag = klbs_read_bits(bs, 8);
+				klbs_read_bits(bs, 7); /* Reserved */
+				seg->components[i].pts_offset = klbs_read_bits(bs, 33);
+			}
 		}
 		if (seg->segmentation_duration_flag) {
 			seg->segmentation_duration = klbs_read_bits(bs, 40);

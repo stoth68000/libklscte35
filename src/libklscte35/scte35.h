@@ -84,6 +84,12 @@ struct splice_descriptor_dtmf
 };
 
 /* SCTE-35 Sec 10.3.3 */
+struct component_info
+{
+	uint8_t component_tag;
+	uint64_t pts_offset;
+};
+
 struct splice_descriptor_segmentation
 {
 	uint32_t event_id;
@@ -95,6 +101,8 @@ struct splice_descriptor_segmentation
 	uint8_t no_regional_blackout_flag;
 	uint8_t archive_allowed_flag;
 	uint8_t device_restrictions;
+	uint8_t component_count;
+	struct component_info components[255];
 	uint64_t segmentation_duration;
 	uint8_t upid_type;
 	uint8_t upid_length;
