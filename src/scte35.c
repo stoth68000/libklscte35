@@ -355,6 +355,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 		printf("Descriptor:\n");
 		SHOW_LINE_U32_SUFFIX("\t", sd->splice_descriptor_tag,
 				     scte35_description_descriptor_name(sd->splice_descriptor_tag));
+		SHOW_LINE_U32("\t", sd->descriptor_length);
 		SHOW_LINE_U32_SUFFIX("\t", sd->identifier,
 				     scte35_description_identifier_name(sd->identifier));
 		switch (sd->identifier) {
