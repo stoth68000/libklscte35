@@ -25,8 +25,8 @@
 #include <libklscte35/scte35.h>
 
 /* Counters to keep track of test results */
-int success=0;
-int fail=0;
+static int success=0;
+static int fail=0;
 
 static void hexdump(unsigned char *buf, unsigned int len, int bytesPerRow /* Typically 16 */)
 {
