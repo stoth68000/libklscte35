@@ -629,7 +629,12 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	}
 
 	int posb = klbs_get_byte_count(bs);
-	si->splice_command_length = posb - posa;
+	if (si->splice_command_length != 0xfff) {
+		/* If we deserialized a packet which had the reserved value 0xfff,
+		   pass that through in packets we generate for consistency.  See
+		   Sec 9.6 description of "splice_command_length" */
+		si->splice_command_length = posb - posa;
+	}
 
 	si->descriptor_loop_length = klbs_read_bits(bs, 16);
 	if (si->descriptor_loop_length) {
@@ -1126,7 +1131,12 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	}
 
 	int posb = klbs_get_byte_count(bs);
-	si->splice_command_length = posb - posa;
+	if (si->splice_command_length != 0xfff) {
+		/* If we deserialized a packet which had the reserved value 0xfff,
+		   pass that through in packets we generate for consistency.  See
+		   Sec 9.6 description of "splice_command_length" */
+		si->splice_command_length = posb - posa;
+	}
 
 	/* Patch in the command length */
 	bs->buf[11] |= ((si->splice_command_length >> 8) & 0x0f);
