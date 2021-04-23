@@ -355,6 +355,7 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 		printf("Descriptor:\n");
 		SHOW_LINE_U32_SUFFIX("\t", sd->splice_descriptor_tag,
 				     scte35_description_descriptor_name(sd->splice_descriptor_tag));
+		SHOW_LINE_U32("\t", sd->descriptor_length);
 		SHOW_LINE_U32_SUFFIX("\t", sd->identifier,
 				     scte35_description_identifier_name(sd->identifier));
 		switch (sd->identifier) {
@@ -384,6 +385,13 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 					SHOW_LINE_U32("\t", sd->seg_data.archive_allowed_flag);
 					SHOW_LINE_U32_SUFFIX("\t", sd->seg_data.device_restrictions,
 							     scte35_seg_device_restrictions(sd->seg_data.device_restrictions));
+					if (sd->seg_data.program_segmentation_flag == 0) {
+						SHOW_LINE_U32("\t", sd->seg_data.component_count);
+						for (int j = 0; j < sd->seg_data.component_count; j++) {
+							SHOW_LINE_U32("\t", sd->seg_data.components[j].component_tag);
+							SHOW_LINE_U64("\t", sd->seg_data.components[j].pts_offset);
+						}
+					}
 					if (sd->seg_data.segmentation_duration_flag) {
 						SHOW_LINE_U64("\t", sd->seg_data.segmentation_duration);
 					}
@@ -437,33 +445,50 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 	klbs_read_set_buffer(bs, desc, descLengthBytes);
 
 	while (bytesRead < descLengthBytes) {
-		/* SCTE 35 Section 10.2, Table 16 */
-		buf[0] = klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
-		buf[1] = klbs_read_bits(bs, 8); /* Descriptor Length */
-		for (int i = 0; i < buf[1]; i++) {
-			buf[i+2] = klbs_read_bits(bs, 8); /* Identifier + Private Bytes */
+		uint8_t desc_tag;
+		uint8_t priv_len;
+
+		if (klbs_get_buffer_size(bs) - klbs_get_byte_count(bs) < 6) {
+			/* Insufficient bytes remaining to parse */
+			break;
 		}
 
-		ret = alloc_SCTE_35_splice_descriptor(buf[0], &sd);
+		/* SCTE 35 Section 10.2, Table 16 */
+		desc_tag = klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
+		ret = alloc_SCTE_35_splice_descriptor(desc_tag, &sd);
 		if (ret != 0)
 			break;
 
-		switch (buf[0]) {
-		case SCTE35_AVAIL_DESCRIPTOR:
-			ret = scte35_parse_avail(sd, buf, buf[1] + 2);
-			break;
-		case SCTE35_DTMF_DESCRIPTOR:
-			ret = scte35_parse_dtmf(sd, buf, buf[1] + 2);
-			break;
-		case SCTE35_SEGMENTATION_DESCRIPTOR:
-			ret = scte35_parse_segmentation(sd, buf, buf[1] + 2);
-			break;
-		case SCTE35_TIME_DESCRIPTOR:
-			ret = scte35_parse_time(sd, buf, buf[1] + 2);
+		sd->descriptor_length = klbs_read_bits(bs, 8); /* Descriptor Length */
+		sd->identifier = klbs_read_bits(bs, 32);
+		priv_len = sd->descriptor_length - 4;
+		for (int i = 0; i < priv_len; i++) {
+			buf[i] = klbs_read_bits(bs, 8); /* Identifier + Private Bytes */
+		}
+
+		switch (sd->identifier) {
+		case 0x43554549:
+			/* SCTE */
+			switch (sd->splice_descriptor_tag) {
+			case SCTE35_AVAIL_DESCRIPTOR:
+				ret = scte35_parse_avail(sd, buf, priv_len);
+				break;
+			case SCTE35_DTMF_DESCRIPTOR:
+				ret = scte35_parse_dtmf(sd, buf, priv_len);
+				break;
+			case SCTE35_SEGMENTATION_DESCRIPTOR:
+				ret = scte35_parse_segmentation(sd, buf, priv_len);
+				break;
+			case SCTE35_TIME_DESCRIPTOR:
+				ret = scte35_parse_time(sd, buf, priv_len);
+				break;
+			default:
+				ret = scte35_parse_descriptor(sd, buf, priv_len);
+				break;
+			}
 			break;
 		default:
-			ret = scte35_parse_descriptor(sd, buf, buf[1] + 2);
-			break;
+			ret = scte35_parse_descriptor(sd, buf, priv_len);
 		}
 
 		if (ret == 0) {
@@ -472,7 +497,7 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			free(sd);
 		}
 
-		bytesRead += buf[1] + 2;
+		bytesRead += (sd->descriptor_length + 2);
 	}
 
 	klbs_free(bs);
@@ -604,7 +629,12 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	}
 
 	int posb = klbs_get_byte_count(bs);
-	si->splice_command_length = posb - posa;
+	if (si->splice_command_length != 0xfff) {
+		/* If we deserialized a packet which had the reserved value 0xfff,
+		   pass that through in packets we generate for consistency.  See
+		   Sec 9.6 description of "splice_command_length" */
+		si->splice_command_length = posb - posa;
+	}
 
 	si->descriptor_loop_length = klbs_read_bits(bs, 16);
 	if (si->descriptor_loop_length) {
@@ -722,17 +752,6 @@ int scte35_parse_avail(struct splice_descriptor *desc, uint8_t *buf, unsigned in
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buf, bufLength);
 
-	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
-	klbs_read_bits(bs, 8); /* Descriptor Length */
-
-	desc->identifier = klbs_read_bits(bs, 32);
-	if (desc->identifier != 0x43554549) {
-		/* The private bytes that follow are only valid if the identifier
-		   is SCTE CUEI */
-		klbs_free(bs);
-		return -1;
-	}
-
 	desc->avail_data.provider_avail_id = klbs_read_bits(bs, 32);
 
 	klbs_free(bs);
@@ -774,17 +793,6 @@ int scte35_parse_dtmf(struct splice_descriptor *desc, uint8_t *buf, unsigned int
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buf, bufLength);
 
-	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
-	klbs_read_bits(bs, 8); /* Descriptor Length */
-
-	desc->identifier = klbs_read_bits(bs, 32);
-	if (desc->identifier != 0x43554549) {
-		/* The private bytes that follow are only valid if the identifier
-		   is SCTE CUEI */
-		klbs_free(bs);
-		return -1;
-	}
-
 	desc->dtmf_data.preroll = klbs_read_bits(bs, 8);
 	desc->dtmf_data.dtmf_count = klbs_read_bits(bs, 3);
 	klbs_read_bits(bs, 5); /* Reserved */
@@ -811,7 +819,7 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	klbs_write_bits(bs, seg->event_cancel_indicator, 1);
 	klbs_write_bits(bs, 0x7f, 7); /* Reserved */
 	if (seg->event_cancel_indicator == 0) {
-		klbs_write_bits(bs, 0x01, 1); /* Program Segmentation Flag */
+		klbs_write_bits(bs, seg->program_segmentation_flag, 1);
 		klbs_write_bits(bs, seg->segmentation_duration_flag ? 1 : 0, 1);
 		klbs_write_bits(bs, seg->delivery_not_restricted_flag, 1);
 		if (seg->delivery_not_restricted_flag == 0) {
@@ -822,7 +830,14 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 		} else {
 			klbs_write_bits(bs, 0x1f, 5); /* Reserved */
 		}
-		if (0) { /* Program Segmentation Flag not set*/
+		if (seg->program_segmentation_flag == 0) {
+			klbs_write_bits(bs, seg->component_count, 8);
+			for (int i = 0; i < seg->component_count; i++) {
+				klbs_write_bits(bs, seg->components[i].component_tag, 8);
+				klbs_write_bits(bs, 0x7f, 7); /* Reserved */
+				klbs_write_bits(bs, seg->components[i].pts_offset, 33);
+			}
+
 			/* FIXME: Component mode not currently supported */
 		}
 		if (seg->segmentation_duration_flag) {
@@ -861,17 +876,6 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buf, bufLength);
 
-	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
-	klbs_read_bits(bs, 8); /* Descriptor Length */
-
-	desc->identifier = klbs_read_bits(bs, 32);
-	if (desc->identifier != 0x43554549) {
-		/* The private bytes that follow are only valid if the identifier
-		   is SCTE CUEI */
-		klbs_free(bs);
-		return -1;
-	}
-
 	seg->event_id = klbs_read_bits(bs, 32);
 	seg->event_cancel_indicator = klbs_read_bits(bs, 1);
 	klbs_read_bits(bs, 7); /* Reserved */
@@ -892,8 +896,13 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 			seg->archive_allowed_flag = 1;
 			seg->device_restrictions = 0x03; /* None */
 		}
-		if (0) { /* Program Segmentation Flag not set*/
-			/* FIXME: Component mode not currently supported */
+		if (seg->program_segmentation_flag == 0) {
+			seg->component_count = klbs_read_bits(bs, 8);
+			for (int i = 0; i < seg->component_count; i++) {
+				seg->components[i].component_tag = klbs_read_bits(bs, 8);
+				klbs_read_bits(bs, 7); /* Reserved */
+				seg->components[i].pts_offset = klbs_read_bits(bs, 33);
+			}
 		}
 		if (seg->segmentation_duration_flag) {
 			seg->segmentation_duration = klbs_read_bits(bs, 40);
@@ -946,17 +955,6 @@ int scte35_parse_time(struct splice_descriptor *desc, uint8_t *buf, unsigned int
 	struct klbs_context_s *bs = klbs_alloc();
 	klbs_write_set_buffer(bs, buf, bufLength);
 
-	klbs_read_bits(bs, 8); /* Splice Descriptor Tag */
-	klbs_read_bits(bs, 8); /* Descriptor Length */
-
-	desc->identifier = klbs_read_bits(bs, 32);
-	if (desc->identifier != 0x43554549) {
-		/* The private bytes that follow are only valid if the identifier
-		   is SCTE CUEI */
-		klbs_free(bs);
-		return -1;
-	}
-
 	desc->time_data.TAI_seconds = klbs_read_bits(bs, 48);
 	desc->time_data.TAI_ns = klbs_read_bits(bs, 32);
 	desc->time_data.UTC_offset = klbs_read_bits(bs, 16);
@@ -984,7 +982,8 @@ int scte35_append_descriptor(struct scte35_splice_info_section_s *si, struct spl
 
 	klbs_write_set_buffer(bs, buffer, sizeof(buffer));
 	klbs_write_bits(bs, desc->splice_descriptor_tag, 8);
-	klbs_write_bits(bs, desc->extra_data.descriptor_data_length, 8);
+	klbs_write_bits(bs, desc->descriptor_length, 8);
+	klbs_write_bits(bs, desc->identifier, 32);
 	for (int i = 0; i < desc->extra_data.descriptor_data_length; i++) {
 		klbs_write_bits(bs, desc->extra_data.descriptor_data[i], 8);
 	}
@@ -1132,7 +1131,12 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	}
 
 	int posb = klbs_get_byte_count(bs);
-	si->splice_command_length = posb - posa;
+	if (si->splice_command_length != 0xfff) {
+		/* If we deserialized a packet which had the reserved value 0xfff,
+		   pass that through in packets we generate for consistency.  See
+		   Sec 9.6 description of "splice_command_length" */
+		si->splice_command_length = posb - posa;
+	}
 
 	/* Patch in the command length */
 	bs->buf[11] |= ((si->splice_command_length >> 8) & 0x0f);
@@ -1141,18 +1145,27 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 	/* Generate the descriptor payload */
 	si->descriptor_loop_length = 0;
 	for (int i = 0; i < si->descriptor_loop_count; i++) {
-		switch(si->descriptors[i]->splice_descriptor_tag) {
-		case SCTE35_AVAIL_DESCRIPTOR:
-			ret = scte35_append_avail(si, si->descriptors[i]);
-			break;
-		case SCTE35_DTMF_DESCRIPTOR:
-			ret = scte35_append_dtmf(si, si->descriptors[i]);
-			break;
-		case SCTE35_SEGMENTATION_DESCRIPTOR:
-			ret = scte35_append_segmentation(si, si->descriptors[i]);
-			break;
-		case SCTE35_TIME_DESCRIPTOR:
-			ret = scte35_append_time(si, si->descriptors[i]);
+		switch (si->descriptors[i]->identifier) {
+		case 0x43554549:
+			switch(si->descriptors[i]->splice_descriptor_tag) {
+			case SCTE35_AVAIL_DESCRIPTOR:
+				ret = scte35_append_avail(si, si->descriptors[i]);
+				break;
+			case SCTE35_DTMF_DESCRIPTOR:
+				ret = scte35_append_dtmf(si, si->descriptors[i]);
+				break;
+			case SCTE35_SEGMENTATION_DESCRIPTOR:
+				ret = scte35_append_segmentation(si, si->descriptors[i]);
+				break;
+			case SCTE35_TIME_DESCRIPTOR:
+				ret = scte35_append_time(si, si->descriptors[i]);
+				break;
+			default:
+				/* SCTE identifer, but unknown descriptor tag, so just
+				   pass it through */
+				ret = scte35_append_descriptor(si, si->descriptors[i]);
+				break;
+			}
 			break;
 		default:
 			/* If it's not one of the known types, it's a unknown/proprietary

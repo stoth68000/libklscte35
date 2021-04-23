@@ -196,12 +196,17 @@ static int scte35_append_104_descriptor(struct klvanc_packet_scte_104_s *pkt, in
 	if (ret != 0)
 		return -1;
 
-	len = des->descriptor_bytes[1];
+	sd->descriptor_length = des->descriptor_bytes[1];
+	sd->identifier = des->descriptor_bytes[2] << 24 |
+		des->descriptor_bytes[3] << 16 |
+		des->descriptor_bytes[4] <<  8 |
+		des->descriptor_bytes[5];
+	len = sd->descriptor_length - 4;
 	if (len > sizeof(sd->extra_data.descriptor_data)) {
 		len = sizeof(sd->extra_data.descriptor_data);
 	}
 	sd->extra_data.descriptor_data_length = len;
-	memcpy(&sd->extra_data.descriptor_data, des->descriptor_bytes + 2, len);
+	memcpy(&sd->extra_data.descriptor_data, des->descriptor_bytes + 6, len);
 
 	si->descriptors[si->descriptor_loop_count++] = sd;
 
