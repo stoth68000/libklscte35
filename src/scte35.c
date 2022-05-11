@@ -294,6 +294,7 @@ int scte35_generate_immediate_in_to_network(uint16_t uniqueProgramId, uint32_t e
 #define SHOW_LINE_U32(indent, field) printf("%s%s = 0x%x (%d)\n", indent, #field, field, field);
 #define SHOW_LINE_U32_SUFFIX(indent, field, suffix) printf("%s%s = 0x%x (%d) [%s]\n", indent, #field, field, field, suffix);
 #define SHOW_LINE_U64(indent, field) printf("%s%s = %" PRIu64 "\n", indent, #field, field);
+#define SHOW_LINE_U64_NOCR(indent, field) printf("%s%s = %" PRIu64, indent, #field, field);
 void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 {
 	SHOW_LINE_U32("", s->table_id);
@@ -318,7 +319,12 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 			SHOW_LINE_U32("\t", s->splice_insert.duration_flag);
 			SHOW_LINE_U32("\t", s->splice_insert.splice_immediate_flag);
 			SHOW_LINE_U32("\t", s->splice_insert.splice_time.time_specified_flag);
-			SHOW_LINE_U64("\t", s->splice_insert.splice_time.pts_time);
+			if (!s->user_current_video_pts) {
+				SHOW_LINE_U64("\t", s->splice_insert.splice_time.pts_time);
+			} else {
+				SHOW_LINE_U64_NOCR("\t", s->splice_insert.splice_time.pts_time);
+				printf( ", begins in %" PRIu64 " (ms)\n", (s->splice_insert.splice_time.pts_time - s->user_current_video_pts) / 90);
+			}
 			SHOW_LINE_U32("\t", s->splice_insert.component_count);
 
 			if (s->splice_insert.duration_flag) {

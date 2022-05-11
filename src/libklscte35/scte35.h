@@ -236,6 +236,16 @@ struct scte35_splice_info_section_s
 	uint32_t e_crc_32;
 	uint32_t crc_32;
 	uint32_t crc_32_is_valid;
+
+	/* User can optionally set this value to represent the
+	 * video PTS time, if they have it, of the last video packet
+	 * received on the corresponding pid. If this is non-zero,
+	 * during calls to scte35_splice_info_section_print(), the framework
+	 * will augment the output, computing current vs preroll trigger times,
+	 * and show the information in the output.
+	 * The value defaults to zero, and is only interpreted when non-zero.
+	 */
+	uint64_t user_current_video_pts;
 };
 
 /* This is used for passing around lists of splices */
