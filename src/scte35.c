@@ -343,8 +343,14 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 	} else
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
 		SHOW_LINE_U32("", s->time_signal.time_specified_flag);
-		if (s->time_signal.time_specified_flag == 1)
-			SHOW_LINE_U64("", s->time_signal.pts_time);
+		if (s->time_signal.time_specified_flag == 1) {
+			if (!s->user_current_video_pts) {
+				SHOW_LINE_U64("", s->time_signal.pts_time);
+			} else {
+				SHOW_LINE_U64_NOCR("", s->time_signal.pts_time);
+				printf( ", begins in %" PRIu64 " (ms)\n", (s->time_signal.pts_time - s->user_current_video_pts) / 90);
+			}
+		}
 	} else
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__BW_RESERVATION) {
 		/* Nothing to do */
