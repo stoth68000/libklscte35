@@ -7,7 +7,7 @@ AM_CPPFLAGS = -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BI
 	-DKL_USERSPACE
 AM_CFLAGS = -Wall -O3
 
-LDADD = ../src/libklscte35.la -lpthread -lz -ldl -lklvanc
+LDADD = ../src/libklscte35.la -lklvanc
 
 if DEBUG
 	CFLAGS += -g
