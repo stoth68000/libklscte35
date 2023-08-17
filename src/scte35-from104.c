@@ -88,6 +88,7 @@ static int scte35_generate_spliceinsert(struct klvanc_packet_scte_104_s *pkt, in
 			/* Pre-roll time is in ms, PTS is in 90 KHz clock */
 			si->splice_insert.splice_time.pts_time = pts
 				+ op->sr_data.pre_roll_time * 90;
+			si->splice_insert.splice_time.pts_time &= 0x1fffffffful;
 		} else {
 			/* SCTE-104:2015 Sec 9.3.1.1 states "If zero (and Component
 			   Mode is not in use) the Injector should set the
@@ -141,11 +142,10 @@ static int scte35_generate_timesignal(struct klvanc_packet_scte_104_s *pkt, int 
 
 	splices[(*outSpliceNum)++] = si;
 
-	if (op->timesignal_data.pre_roll_time != 0) {
-		/* Pre-roll time is in ms, PTS is in 90 KHz clock */
-		si->time_signal.pts_time = pts + op->timesignal_data.pre_roll_time * 90;
-		si->time_signal.time_specified_flag = 1;
-	}
+	/* Pre-roll time is in ms, PTS is in 90 KHz clock */
+	si->time_signal.pts_time = pts + op->timesignal_data.pre_roll_time * 90;
+	si->time_signal.pts_time &= 0x1fffffffful;
+	si->time_signal.time_specified_flag = 1;
 
 	return 0;
 }
