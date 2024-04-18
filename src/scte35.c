@@ -700,13 +700,26 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
-	for (int i = 0; i < SCTE35_MAX_DESCRIPTORS; i++) {
-		if (s->descriptors[i] != NULL)
+	uint16_t i;
+	if (!s)
+		return;
+	for (i=0; i<s->descriptor_loop_count; i++)
+	{
+		if (s->descriptors[i])
+		{
 			free(s->descriptors[i]);
+			s->descriptors[i] = NULL;
+		}
 	}
-	if (s->splice_descriptor)
+	s->descriptor_loop_count = 0;
+	if (s->descriptor_loop_length && s->splice_descriptor)
+	{
 		free(s->splice_descriptor);
+		s->splice_descriptor = NULL;
+	}
+	s->descriptor_loop_length = 0;
 	free(s);
+	s = NULL;
 }
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t command_type)
