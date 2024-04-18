@@ -151,9 +151,19 @@ static int scte35_append_descriptor(struct splice_descriptor *sd, struct klvanc_
 		return -1;
 
 	op->descriptor_data.descriptor_count = 1;
-	op->descriptor_data.total_length = sd->extra_data.descriptor_data_length;
-	for (int i = 0; i < op->descriptor_data.total_length; i++) {
-		op->descriptor_data.descriptor_bytes[i] = sd->extra_data.descriptor_data[i];
+	op->descriptor_data.total_length = sd->extra_data.descriptor_data_length + 6;
+	// 1 byte tag + 1 byte len + 4 bytes identifier = 6 bytes
+
+	op->descriptor_data.descriptor_bytes[0] = sd->splice_descriptor_tag;
+	op->descriptor_data.descriptor_bytes[1] = sd->extra_data.descriptor_data_length + 4;
+	// Data + 4 bytes identifier
+	op->descriptor_data.descriptor_bytes[2] = (uint8_t)((sd->identifier >> 24) & 0xff);
+	op->descriptor_data.descriptor_bytes[3] = (uint8_t)((sd->identifier >> 16) & 0xff);
+	op->descriptor_data.descriptor_bytes[4] = (uint8_t)((sd->identifier >> 8) & 0xff);
+	op->descriptor_data.descriptor_bytes[5] = (uint8_t)(sd->identifier & 0xff);
+
+	for (int i = 0; i < sd->extra_data.descriptor_data_length; i++) {
+		op->descriptor_data.descriptor_bytes[6 + i] = sd->extra_data.descriptor_data[i];
 	}
 
 	return 0;
