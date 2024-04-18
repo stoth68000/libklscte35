@@ -503,13 +503,13 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			ret = scte35_parse_descriptor(sd, buf, priv_len);
 		}
 
+		bytesRead += (sd->descriptor_length + 2);
 		if (ret == 0) {
 			si->descriptors[si->descriptor_loop_count++] = sd;
 		} else {
 			free(sd);
+			sd = NULL;
 		}
-
-		bytesRead += (sd->descriptor_length + 2);
 	}
 
 	klbs_free(bs);
