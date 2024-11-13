@@ -681,6 +681,85 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	return byteCount;
 }
 
+uint64_t scte35_splice_info_section_s *scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
+{
+	int ret;
+
+	if (*(section + 0) != SCTE35_TABLE_ID)
+		return NULL;
+
+	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
+	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
+	if (ret < 0) {
+		free(s);
+		return NULL;
+	}
+
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+		if (s->splice_insert.splice_event_cancel_indicator == 0) {
+			if (!s->user_current_video_pts) {
+				return s->splice_insert.splice_time.pts_time;
+			} else {
+				return s->splice_insert.splice_time.pts_time;
+			}
+		}
+
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		if (s->time_signal.time_specified_flag == 1) {
+			if (!s->user_current_video_pts) {
+				return s->time_signal.pts_time;
+			} else {
+				return s->time_signal.pts_time;
+			}
+		}
+	}
+
+	scte35_splice_info_section_free(s)
+
+	return 0
+
+}
+
+struct scte35_splice_info_section_s *scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts)
+{
+	int ret;
+
+	if (*(section + 0) != SCTE35_TABLE_ID)
+		return NULL;
+
+	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
+	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
+	if (ret < 0) {
+		free(s);
+		return NULL;
+	}
+
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+		if (s->splice_insert.splice_event_cancel_indicator == 0) {
+			if (!s->user_current_video_pts) {
+				s->splice_insert.splice_time.pts_time = target_pts;
+			} else {
+				s->splice_insert.splice_time.pts_time = target_pts;
+			}
+		}
+
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		if (s->time_signal.time_specified_flag == 1) {
+			if (!s->user_current_video_pts) {
+				s->time_signal.pts_time = target_pts;
+			} else {
+				s->time_signal.pts_time = target_pts;
+			}
+		}
+	}
+
+	scte35_splice_info_section_packTo(s, section, byteCount);
+
+	scte35_splice_info_section_free(s)
+}
+
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
 {
 	int ret;
