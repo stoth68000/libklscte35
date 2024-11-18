@@ -353,6 +353,11 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t co
  */
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
 
+
+void scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts);
+
+uint64_t scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount);
+
 /**
  * @brief	Convert SCTE35 to SCTE104.
  * @param[in]	struct scte35_splice_info_section_s *s - Brief description goes here.

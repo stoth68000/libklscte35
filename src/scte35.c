@@ -681,7 +681,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	return byteCount;
 }
 
-uint64_t scte35_splice_info_section_s *scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
+uint64_t scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
 {
 	int ret;
 
@@ -715,24 +715,26 @@ uint64_t scte35_splice_info_section_s *scte35_splice_info_section_get_pts(uint8_
 		}
 	}
 
-	scte35_splice_info_section_free(s)
+	scte35_splice_info_section_free(s);
 
-	return 0
+	return 0;
 
 }
 
-struct scte35_splice_info_section_s *scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts)
+void scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts)
 {
 	int ret;
+	int ret1;
 
-	if (*(section + 0) != SCTE35_TABLE_ID)
-		return NULL;
+	if (*(section + 0) != SCTE35_TABLE_ID) {
+		return;
+	}
 
 	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
 	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
 	if (ret < 0) {
 		free(s);
-		return NULL;
+		return;
 	}
 
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
@@ -755,9 +757,8 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_set_pts(uint8_t 
 		}
 	}
 
-	scte35_splice_info_section_packTo(s, section, byteCount);
-
-	scte35_splice_info_section_free(s)
+	ret1 = scte35_splice_info_section_packTo(s, section, 128);
+	scte35_splice_info_section_free(s);
 }
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
