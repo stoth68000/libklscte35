@@ -681,50 +681,45 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	return byteCount;
 }
 
-uint64_t scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
+int64_t scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
 {
 	int ret;
 
 	if (*(section + 0) != SCTE35_TABLE_ID)
-		return NULL;
+		return -1;
 
 	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
 	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
 	if (ret < 0) {
 		free(s);
-		return NULL;
+		return -1;
 	}
 
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 		if (s->splice_insert.splice_event_cancel_indicator == 0) {
-			if (!s->user_current_video_pts) {
-				return s->splice_insert.splice_time.pts_time;
-			} else {
-				return s->splice_insert.splice_time.pts_time;
+			if ((s->splice_insert.program_splice_flag == 1) && (s->splice_insert.splice_immediate_flag == 0)) {
+				if (s->splice_insert.splice_time.time_specified_flag == 1) {
+					return s->splice_insert.splice_time.pts_time;
+				}
 			}
 		}
 
 	} else
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
 		if (s->time_signal.time_specified_flag == 1) {
-			if (!s->user_current_video_pts) {
 				return s->time_signal.pts_time;
-			} else {
-				return s->time_signal.pts_time;
-			}
 		}
 	}
 
 	scte35_splice_info_section_free(s);
 
-	return 0;
+	return -1;
 
 }
 
 void scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts)
 {
 	int ret;
-	int ret1;
 
 	if (*(section + 0) != SCTE35_TABLE_ID) {
 		return;
@@ -739,25 +734,21 @@ void scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount
 
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
 		if (s->splice_insert.splice_event_cancel_indicator == 0) {
-			if (!s->user_current_video_pts) {
-				s->splice_insert.splice_time.pts_time = target_pts;
-			} else {
-				s->splice_insert.splice_time.pts_time = target_pts;
+			if ((s->splice_insert.program_splice_flag == 1) && (s->splice_insert.splice_immediate_flag == 0)) {
+				if (s->splice_insert.splice_time.time_specified_flag == 1) {
+					s->splice_insert.splice_time.pts_time = target_pts;
+				}
 			}
 		}
 
 	} else
 	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
 		if (s->time_signal.time_specified_flag == 1) {
-			if (!s->user_current_video_pts) {
 				s->time_signal.pts_time = target_pts;
-			} else {
-				s->time_signal.pts_time = target_pts;
-			}
 		}
 	}
 
-	ret1 = scte35_splice_info_section_packTo(s, section, 128);
+	ret = scte35_splice_info_section_packTo(s, section, 4096);
 	scte35_splice_info_section_free(s);
 }
 

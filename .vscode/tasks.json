@@ -1,109 +1,54 @@
 {
-    "version": "2.0.0",
+    "version": "0.1.0",
     "command": "bash",
-    "args": [
-        "-c"
-    ],
+    "isShellCommand": true,
+    "args": ["-c"],
+    "showOutput": "always",
     "echoCommand": true,
+    "suppressTaskName": true,
     "tasks": [
-        {
-            "label": "make",
-            "type": "shell",
-            "args": [
-                "-c",
-                "make"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "isShellCommand": true,
+            "taskName": "make",
+            "args": ["make"],
+            "showOutput": "always",
         },
-        {
-            "label": "make clean (tools)",
-            "type": "shell",
-            "args": [
-                "-c",
-                "make",
-                "-C",
-                "tools",
-                "clean"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "make clean (tools)",
+            "args": ["make", "-C", "tools", "clean"],
+            "showOutput": "always",
         },
-        {
-            "label": "make clean (src)",
-            "type": "shell",
-            "args": [
-                "-c",
-                "make",
-                "-C",
-                "src",
-                "clean"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "make clean (src)",
+            "args": ["make", "-C", "src", "clean"],
+            "showOutput": "always",
         },
-        {
-            "label": "run util usage",
-            "type": "shell",
-            "args": [
-                "-c",
-                "tools/iso13818_util",
-                "-h"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "run util usage",
+            "args": ["tools/iso13818_util", "-h"],
+            "showOutput": "always",
         },
-        {
-            "label": "configure",
-            "type": "shell",
-            "args": [
-                "-c",
-                "./configure --enable-shared=no"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "configure",
+            "args": ["./configure --enable-shared=no"],
+            "showOutput": "always",
         },
-        {
-            "label": "autogen.sh --build",
-            "type": "shell",
-            "args": [
-                "-c",
-                "./autogen.sh --build"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "autogen.sh --build",
+            "args": ["./autogen.sh --build"],
+            "showOutput": "always",
         },
-        {
-            "label": "Doxygen - Create Docs",
-            "type": "shell",
-            "args": [
-                "-c",
-                "make docs"
-            ],
-            "problemMatcher": [],
-            "group": {
-                "_id": "build",
-                "isDefault": false
-            }
+        { 
+            "isBuildCommand": true,
+            "taskName": "Doxygen - Create Docs",
+            "args": ["make docs"],
+            "showOutput": "always",
         }
     ]
 }
-
