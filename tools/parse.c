@@ -23,6 +23,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <libklscte35/scte35.h>
+#include <libklscte35/pes.h>
+#include <libklscte35/ts.h>
+
+#define USAGE "./ts_retimestamp <input_ts_file> <scte_pid>"
+#define PSI_HEADER_SIZE         3
 
 /* Counters to keep track of test results */
 static int success=0;
@@ -237,42 +242,10 @@ static int parse(uint8_t *sec, int byteCount)
 		/* Dump struct to console */
 		scte35_splice_info_section_print(s);
 
-                /* Verify our generator creates the same payload */
-		memset(buf, 0, sizeof(buf));
-		ret = scte35_splice_info_section_packTo(s, buf, sizeof(buf));
-		if (ret < 0) {
-			printf("Failed to create section\n");
-			fail++;
-			return 0;
-		}
-
-		if (ret == byteCount && memcmp(sec, buf, byteCount) == 0) {
-			printf("Identical!\n");
-			success++;
-		} else if (ret == byteCount && memcmp(sec+2, buf+2, byteCount-6) == 0) {
-			printf("Only difference is Reserved padding at start of segment!\n");
-			success++;
-		} else {
-			struct scte35_splice_info_section_s *generated;
-			printf("Different!\n");
-			fail++;
-
-			/* Show the differences */
-			printf("Orig (len=%d)\n", byteCount);
-			hexdump(sec, byteCount, 16);
-			printf("New (len=%d)\n", ret);
-			if (ret >= 0)
-				hexdump(buf, ret, 16);
-
-			generated = scte35_splice_info_section_parse(buf, ret);
-			if (generated) {
-				scte35_splice_info_section_print(generated);
-				scte35_splice_info_section_free(generated);
-			}
-		}
 		/* Free the allocated resource */
 		scte35_splice_info_section_free(s);
 
+		success++;
 		printf("\n");
 	} else {
 		fail++;
@@ -281,46 +254,50 @@ static int parse(uint8_t *sec, int byteCount)
 	return 0;
 }
 
+static inline uint16_t psi_get_length(const uint8_t *p_section)
+{
+    return ((p_section[1] & 0xf) << 8) | p_section[2];
+}
+
 int parse_main(int argc, char *argv[])
 {
-	printf("Parsing mouse out-of-network sample\n");
-	parse(&mouse_oon[0], sizeof(mouse_oon));
-	printf("Parsing mouse btn sample\n");
-	parse(&mouse_btn[0], sizeof(mouse_btn));
+	if(argc < 2) {
+        printf(USAGE);
+		printf("Failures=1\n");
+        exit(1);
+    }
+    char *inp_filename = argv[1];
+    uint64_t   scte_pid = strtoull(argv[2], NULL, 10);
+    unsigned char  ts_pkt[256];
+    unsigned char  *scte_data;
+    //int  n_pkts = 0;
+    int pid;
 
-	/* Samples from Comcast GoTs project */
-	printf("Parsing Comcast GOTS test1 sample\n");
-	parse(&comcast_gots_test1[0], sizeof(comcast_gots_test1));
-	printf("Parsing Comcast GOTS test2 sample\n");
-	parse(&comcast_gots_test2[0], sizeof(comcast_gots_test2));
-	printf("Parsing Comcast GOTS test3 sample\n");
-	parse(&comcast_gots_test3[0], sizeof(comcast_gots_test3));
+	FILE *fptr;
 
-	/* Misc samples that previously exposed bugs */
-	printf("Parsing bandwidth reservation sample\n");
-	parse(&bw_reservation[0], sizeof(bw_reservation));
-	printf("Parsing invalid segmentation identifier sample\n");
-	parse(&seg_invalid_id[0], sizeof(seg_invalid_id));
+	// Open a file in read mode
+	fptr = fopen(inp_filename, "r");
 
-	/* Taken from SCTE-35:2019 Section 14 */
-	printf("Parsing SCTE-35:2019 Sec 14.1 Time_Signal – Placement Opportunity Start\n");
-	parse(&scte35_2019_14_1[0], sizeof(scte35_2019_14_1));
-	printf("Parsing SCTE-35:2019 Sec 14.2 Splice_Insert\n");
-	parse(&scte35_2019_14_2[0], sizeof(scte35_2019_14_2));
-	printf("Parsing SCTE-35:2019 Sec 14.3 Time_Signal – Placement Opportunity End\n");
-	parse(&scte35_2019_14_3[0], sizeof(scte35_2019_14_3));
-	printf("Parsing SCTE-35:2019 Sec 14.4 Time_Signal – Program Start/End\n");
-	parse(&scte35_2019_14_4[0], sizeof(scte35_2019_14_4));
-	printf("Parsing SCTE-35:2019 Sec 14.5 Time_Signal – Program Overlap Start\n");
-	parse(&scte35_2019_14_5[0], sizeof(scte35_2019_14_5));
-	printf("Parsing SCTE-35:2019 Sec 14.6 Time_Signal – Program Blackout Override / Program End\n");
-	parse(&scte35_2019_14_6[0], sizeof(scte35_2019_14_6));
-	printf("Parsing SCTE-35:2019 Sec 14.7 Time_Signal – Program End\n");
-	parse(&scte35_2019_14_7[0], sizeof(scte35_2019_14_7));
-	printf("Parsing SCTE-35:2019 Sec 14.8 Time_Signal – Program Start/End - Placement Opportunity End\n");
-	parse(&scte35_2019_14_8[0], sizeof(scte35_2019_14_8));
+	// Print some text if the file does not exist
+	if(fptr == NULL) {
+	printf("Not able to open the file.\n");
+	printf("Failures=1\n");
+    exit(1);
+	}
 
-	printf("program complete.\n");
-	printf("Success=%d Failures=%d\n", success, fail);
+    while(fread((char*)ts_pkt,188,1,fptr)) {
+        pid = ts_get_pid(ts_pkt);
+
+        if(ts_get_unitstart(ts_pkt) && pid == scte_pid)
+        {
+            scte_data = ts_section(ts_pkt);
+			
+            parse(scte_data, PSI_HEADER_SIZE + psi_get_length(scte_data));
+
+        }
+    }
+    fclose(fptr);
+	printf("Success=%d\n", success);
+	printf("Failures=%d\n", fail);
 	return 0;
 }

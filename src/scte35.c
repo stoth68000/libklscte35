@@ -503,13 +503,13 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			ret = scte35_parse_descriptor(sd, buf, priv_len);
 		}
 
+		bytesRead += (sd->descriptor_length + 2);
 		if (ret == 0) {
 			si->descriptors[si->descriptor_loop_count++] = sd;
 		} else {
 			free(sd);
+			sd = NULL;
 		}
-
-		bytesRead += (sd->descriptor_length + 2);
 	}
 
 	klbs_free(bs);
@@ -681,6 +681,82 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	return byteCount;
 }
 
+int64_t scte35_splice_info_section_get_pts(uint8_t *section, unsigned int byteCount)
+{
+	int ret;
+	int64_t pts_time;
+
+	if (*(section + 0) != SCTE35_TABLE_ID)
+		return -1;
+
+	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
+	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
+	if (ret < 0) {
+		free(s);
+		return -1;
+	}
+
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+		if (s->splice_insert.splice_event_cancel_indicator == 0) {
+			if ((s->splice_insert.program_splice_flag == 1) && (s->splice_insert.splice_immediate_flag == 0)) {
+				if (s->splice_insert.splice_time.time_specified_flag == 1) {
+					pts_time = s->splice_insert.splice_time.pts_time;
+					scte35_splice_info_section_free(s);
+					return pts_time;
+				}
+			}
+		}
+
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		if (s->time_signal.time_specified_flag == 1) {
+				pts_time = s->time_signal.pts_time;
+				scte35_splice_info_section_free(s);
+				return pts_time;
+		}
+	}
+
+	scte35_splice_info_section_free(s);
+
+	return -1;
+
+}
+
+void scte35_splice_info_section_set_pts(uint8_t *section, unsigned int byteCount, uint64_t target_pts)
+{
+	int ret;
+
+	if (*(section + 0) != SCTE35_TABLE_ID) {
+		return;
+	}
+
+	struct scte35_splice_info_section_s *s = calloc(1, sizeof(*s));
+	ret = scte35_splice_info_section_unpackFrom(s, section, byteCount);
+	if (ret < 0) {
+		free(s);
+		return;
+	}
+
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_INSERT) {
+		if (s->splice_insert.splice_event_cancel_indicator == 0) {
+			if ((s->splice_insert.program_splice_flag == 1) && (s->splice_insert.splice_immediate_flag == 0)) {
+				if (s->splice_insert.splice_time.time_specified_flag == 1) {
+					s->splice_insert.splice_time.pts_time = target_pts;
+				}
+			}
+		}
+
+	} else
+	if (s->splice_command_type == SCTE35_COMMAND_TYPE__TIME_SIGNAL) {
+		if (s->time_signal.time_specified_flag == 1) {
+				s->time_signal.pts_time = target_pts;
+		}
+	}
+
+	ret = scte35_splice_info_section_packTo(s, section, 4096);
+	scte35_splice_info_section_free(s);
+}
+
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
 {
 	int ret;
@@ -700,13 +776,26 @@ struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *s
 
 void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s)
 {
-	for (int i = 0; i < SCTE35_MAX_DESCRIPTORS; i++) {
-		if (s->descriptors[i] != NULL)
+	uint16_t i;
+	if (!s)
+		return;
+	for (i=0; i<s->descriptor_loop_count; i++)
+	{
+		if (s->descriptors[i])
+		{
 			free(s->descriptors[i]);
+			s->descriptors[i] = NULL;
+		}
 	}
-	if (s->splice_descriptor)
+	s->descriptor_loop_count = 0;
+	if (s->descriptor_loop_length && s->splice_descriptor)
+	{
 		free(s->splice_descriptor);
+		s->splice_descriptor = NULL;
+	}
+	s->descriptor_loop_length = 0;
 	free(s);
+	s = NULL;
 }
 
 struct scte35_splice_info_section_s *scte35_splice_info_section_alloc(uint8_t command_type)
