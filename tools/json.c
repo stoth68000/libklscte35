@@ -47,9 +47,13 @@ static int parse(const uint8_t *sec, int byteCount)
 		if (ret == 0) {
 			printf("JSON formatted message : ");
 			printf("%s\n", buf);
+			free(buf);
 		} else {
 			fprintf(stderr, "Unable to convert SCTE35 to JSON, ret = %d\n", ret);
 		}
+
+		/* Free the allocated resource */
+		scte35_splice_info_section_free(s);
 	}
 
 	return 0;

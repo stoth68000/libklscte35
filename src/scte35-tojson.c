@@ -374,6 +374,7 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 	json_object_object_add(results, "splice_info_section", jobj);
 	*buf = strdup(json_object_to_json_string_ext(results, JSON_C_TO_STRING_PRETTY));
 	*byteCount=strlen(*buf);
+	json_object_put(results);
 
 	return ret;
 }
