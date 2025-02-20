@@ -32,6 +32,17 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [return 0;])],
     [AC_MSG_RESULT(no)
      CFLAGS="$SAVED_CFLAGS"])
 
+AC_ARG_WITH([libjsonc],
+  [AS_HELP_STRING([--with-libjsonc],
+    [support handling JSON files @<:@default=check@:>@])],
+  [],
+  [with_libjsonc=check])
+AS_CASE(["$with_libjsonc"],
+  [yes], [PKG_CHECK_MODULES([libjsonc], [json-c], [HAVE_LIBJSONC=1])],
+  [no], [HAVE_LIBJSONC=0],
+  [PKG_CHECK_MODULES([libjsonc], [json-c], [HAVE_LIBJSONC=1], [HAVE_LIBJSONC=0])])
+AM_CONDITIONAL([USE_LIBJSONC], [test "$with_libjsonc" != no -a "$HAVE_LIBJSONC" -eq 1])
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
 
