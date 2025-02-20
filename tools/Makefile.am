@@ -5,19 +5,13 @@ AM_CPPFLAGS = -DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\"" -D_FILE_OFFSET_BI
 	-D_BSD_SOURCE \
 	-I$(top_srcdir)/src \
 	-DKL_USERSPACE
-AM_CFLAGS = -Wall -O3
+AM_CFLAGS = -Wall -O3 -g
 
 LDADD = ../src/libklscte35.la -lklvanc
 
 if USE_LIBJSONC
 LDADD += ${libjsonc_LIBS}
 endif
-
-if DEBUG
-	CFLAGS += -g
-endif
-
-CXXFLAGS = $(CFLAGS)
 
 SRC  = klscte35_util.c
 SRC += scte35_samples.c
