@@ -325,7 +325,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
  * @return	< 0 - Error
  */
 ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si,
-	uint8_t *src, uint32_t srcLengthBytes);
+					      const uint8_t *src, uint32_t srcLengthBytes);
 
 /**
  * @brief	TODO - Brief description goes here.
@@ -333,7 +333,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
  * @param[in]	uint8_t *section - Brief description goes here.
  * @param[in]	unsigned int byteCount - Brief description goes here.
  */
-struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount);
+struct scte35_splice_info_section_s *scte35_splice_info_section_parse(const uint8_t *section, unsigned int byteCount);
 
 /**
  * @brief	TODO - Brief description goes here.
