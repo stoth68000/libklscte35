@@ -227,7 +227,7 @@ static int json_append_segmentation(struct splice_descriptor *sd, json_object *o
 
         json_object_array_add(obj, desc);
 
-	json_object_object_add(desc, "descriptor_type" , json_object_new_string("segmentataion_descriptor"));
+	json_object_object_add(desc, "descriptor_type" , json_object_new_string("segmentation_descriptor"));
 	json_object_object_add(desc, "splice_descriptor_tag",
 			       json_object_new_int64(sd->splice_descriptor_tag));
 	json_object_object_add(desc, "identifier",
@@ -302,11 +302,9 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 {
 	int ret = -1;
 
-	json_object *results = json_object_new_object();
-	if (results == NULL)
-		return -1;
-
         json_object * jobj = json_object_new_object();
+	if (jobj == NULL)
+		return -1;
 
 	json_object_object_add(jobj, "table_id", json_object_new_int64(s->table_id));
 	json_object_object_add(jobj, "section_syntax_indicator", json_object_new_boolean(s->section_syntax_indicator));
@@ -368,13 +366,12 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 				break;
 			}
 		}
-		json_object_object_add(jobj, "splice_descriptors", desc_array);
+		json_object_object_add(jobj, "descriptors", desc_array);
 	}
 
-	json_object_object_add(results, "splice_info_section", jobj);
-	*buf = strdup(json_object_to_json_string_ext(results, JSON_C_TO_STRING_PRETTY));
+	*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
 	*byteCount=strlen(*buf);
-	json_object_put(results);
+	json_object_put(jobj);
 
 	return ret;
 }
