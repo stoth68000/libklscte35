@@ -8,6 +8,8 @@ libklscte35_la_SOURCES += scte35-to104.c
 libklscte35_la_SOURCES += scte35-from104.c
 libklscte35_la_SOURCES += crc32.c
 libklscte35_la_SOURCES += crc32.h
+libklscte35_la_SOURCES += base64.c
+libklscte35_la_SOURCES += base64.h
 libklscte35_la_SOURCES += klbitstream_readwriter.h
 if USE_LIBJSONC
 libklscte35_la_SOURCES += scte35-tojson.c

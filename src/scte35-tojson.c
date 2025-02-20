@@ -20,6 +20,7 @@
  */
 
 #include "libklscte35/scte35.h"
+#include "base64.h"
 #include <json-c/json.h>
 #include <stdio.h>
 
@@ -113,6 +114,9 @@ static int json_generate_private(const struct scte35_splice_private_s *si,
 				    json_object *obj)
 {
         json_object *splice = json_object_new_object();
+	uint8_t *base64_out;
+	size_t base64_outlen;
+
 	if (splice == NULL)
 		return -1;
 
@@ -120,12 +124,11 @@ static int json_generate_private(const struct scte35_splice_private_s *si,
 
 	json_object_object_add(splice, "identifier", json_object_new_int64(si->identifier));
 
-#if 0
-	/* FIXME: encoding of the private bytes */
-	for (int i = 0; i < si->private_length; i++) {
-		blah = si->private_byte[i];
+	base64_out = klscte35_base64_encode((uint8_t *)si->private_byte, si->private_length, &base64_outlen);
+	if (base64_out) {
+		json_object_object_add(splice, "private_bytes" ,json_object_new_string((char *)base64_out));
+		free(base64_out);
 	}
-#endif
 
 	return 0;
 }
@@ -143,6 +146,8 @@ static int json_generate_bandwidth_reservation(json_object *obj)
 
 static int json_append_private_splice(struct splice_descriptor *sd, json_object *obj)
 {
+	uint8_t *base64_out;
+	size_t base64_outlen;
         json_object *desc = json_object_new_object();
 	if (desc == NULL)
 		return -1;
@@ -155,12 +160,12 @@ static int json_append_private_splice(struct splice_descriptor *sd, json_object 
 	json_object_object_add(desc, "identifier",
 			       json_object_new_int64(sd->identifier));
 
-#if 0
-	/* FIXME: encoding of the private descriptor bytes */
-	for (int i = 0; i < sd->extra_data.descriptor_data_length; i++) {
-		op->descriptor_data.descriptor_bytes[i] = sd->extra_data.descriptor_data[i];
+	base64_out = klscte35_base64_encode((uint8_t *)sd->extra_data.descriptor_data,
+					    sd->extra_data.descriptor_data_length, &base64_outlen);
+	if (base64_out) {
+		json_object_object_add(desc, "private_bytes" ,json_object_new_string((char *)base64_out));
+		free(base64_out);
 	}
-#endif
 
 	return 0;
 }
