@@ -16,6 +16,7 @@ endif
 CXXFLAGS = $(CFLAGS)
 
 SRC  = klscte35_util.c
+SRC += scte35_samples.c
 SRC += demo.c
 SRC += parse.c
 SRC += scte104.c
