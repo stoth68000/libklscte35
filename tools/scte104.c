@@ -79,6 +79,16 @@ static int parse(const uint8_t *sec, int byteCount)
 		uint16_t byteCount;
 		int ret = scte35_create_scte104_message(s, &buf, &byteCount, 0);
 		if (ret == 0) {
+
+			/* Note it's legal to return success but not have allocated buf, in particular
+			   for bandwidth reservation messages */
+			if (byteCount == 0) {
+				printf("Success but empty return message (probably BW reservation?)");
+				scte35_splice_info_section_free(s);
+				klvanc_context_destroy(ctx);
+				return 0;
+			}
+
 			printf("SCTE104 formatted message : ");
 			hexdump(buf, byteCount, 32);
 
