@@ -20,15 +20,18 @@ SRC += parse.c
 SRC += scte104.c
 SRC += scte104to35.c
 SRC += json.c
+SRC += base64.c
 
 bin_PROGRAMS  = klscte35_util
 bin_PROGRAMS += klscte35_parse
 bin_PROGRAMS += klscte35_scte104
 bin_PROGRAMS += klscte35_scte104to35
 bin_PROGRAMS += klscte35_tojson
+bin_PROGRAMS += klscte35_tobase64
 
 klscte35_util_SOURCES = $(SRC)
 klscte35_parse_SOURCES = $(SRC)
 klscte35_scte104_SOURCES = $(SRC)
 klscte35_scte104to35_SOURCES = $(SRC)
 klscte35_tojson_SOURCES = $(SRC)
+klscte35_tobase64_SOURCES = $(SRC)

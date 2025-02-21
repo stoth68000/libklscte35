@@ -11,6 +11,7 @@ libklscte35_la_SOURCES += crc32.h
 libklscte35_la_SOURCES += base64.c
 libklscte35_la_SOURCES += base64.h
 libklscte35_la_SOURCES += klbitstream_readwriter.h
+libklscte35_la_SOURCES += scte35-tobase64.c
 if USE_LIBJSONC
 libklscte35_la_SOURCES += scte35-tojson.c
 else

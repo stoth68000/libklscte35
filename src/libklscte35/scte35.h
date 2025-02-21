@@ -377,6 +377,16 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf,
 			       uint16_t *byteCount);
 
+/**
+ * @brief	Convert SCTE35 to Base64 representation.
+ * @param[in]	struct scte35_splice_info_section_s *s - SCTE-35 packet
+ * @param[out]	char **buf - NULL terminated string will be allocated and pointer returned here
+ * @param[out]	uint16_t *byteCount - Length of buf pointer will be returned here
+ * @return	0 - Success
+ * @return	< 0 - Error
+ */
+int scte35_create_base64_message(struct scte35_splice_info_section_s *s, char **buf,
+				 uint32_t *byteCount);
 
 /**
  * @brief	Return a human readable label for the command type. Eg. SPLICE_NULL.

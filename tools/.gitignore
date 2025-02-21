@@ -3,3 +3,4 @@ klscte35_parse
 klscte35_scte104
 klscte35_scte104to35
 klscte35_tojson
+klscte35_tobase64
