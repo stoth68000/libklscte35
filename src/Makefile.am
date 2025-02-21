@@ -4,8 +4,13 @@ AUTOMAKE_OPTIONS = foreign
 lib_LTLIBRARIES = libklscte35.la
 
 libklscte35_la_SOURCES  = scte35.c
+if USE_LIBKLVANC
 libklscte35_la_SOURCES += scte35-to104.c
 libklscte35_la_SOURCES += scte35-from104.c
+else
+libklscte35_la_SOURCES += scte35-to104-stub.c
+libklscte35_la_SOURCES += scte35-from104-stub.c
+endif
 libklscte35_la_SOURCES += crc32.c
 libklscte35_la_SOURCES += crc32.h
 libklscte35_la_SOURCES += base64.c

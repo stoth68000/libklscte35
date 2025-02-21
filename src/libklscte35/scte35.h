@@ -30,7 +30,10 @@
 #define SCTE35_H
 
 #include <stdint.h>
-#include <libklvanc/vanc.h>
+#include <sys/types.h>
+
+/* We use an extern here so we can build successfully even if libklvanc isn't available */
+extern struct klvanc_packet_scte_104_s *pkt;
 
 #ifdef __cplusplus
 extern "C" {

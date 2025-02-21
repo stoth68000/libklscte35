@@ -32,6 +32,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [return 0;])],
     [AC_MSG_RESULT(no)
      CFLAGS="$SAVED_CFLAGS"])
 
+# Determine whether to include support for libjson-c
 AC_ARG_WITH([libjsonc],
   [AS_HELP_STRING([--with-libjsonc],
     [support handling JSON files @<:@default=check@:>@])],
@@ -43,12 +44,21 @@ AS_CASE(["$with_libjsonc"],
   [PKG_CHECK_MODULES([libjsonc], [json-c], [HAVE_LIBJSONC=1], [HAVE_LIBJSONC=0])])
 AM_CONDITIONAL([USE_LIBJSONC], [test "$with_libjsonc" != no -a "$HAVE_LIBJSONC" -eq 1])
 
+# Determine whether to include support for libklvanc
+AC_ARG_WITH([libklvanc],
+  [AS_HELP_STRING([--with-libklvanc],
+    [support conversion of SCTE-104 @<:@default=check@:>@])],
+  [],
+  [with_libklvanc=check])
+AS_CASE(["$with_libklvanc"],
+  [yes], [AC_CHECK_HEADERS([libklvanc/vanc.h],[HAVE_LIBKLVANC=1])],
+  [no], [HAVE_LIBKLVANC=0],
+  [AC_CHECK_HEADERS([libklvanc/vanc.h],[HAVE_LIBKLVANC=1],[HAVE_LIBKLVANC=0])])
+AM_CONDITIONAL([USE_LIBKLVANC], [test "$with_libklvanc" != no -a "$HAVE_LIBKLVANC" -eq 1])
+AM_COND_IF(USE_LIBKLVANC, AC_DEFINE(HAVE_LIBKLVANC, 1, [Include libklvanc support]))
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h unistd.h])
-
-AC_CHECK_HEADERS([libklvanc/vanc.h],
-                 [break],
-                 [AC_MSG_ERROR([libklvanc headers not found or not usable])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UINT16_T

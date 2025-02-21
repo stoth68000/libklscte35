@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <libklscte35/scte35.h>
 #include "scte35_samples.h"
 

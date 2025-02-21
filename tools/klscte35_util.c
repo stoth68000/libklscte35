@@ -41,8 +41,10 @@ int main(int argc, char *argv[])
 	} apps[] = {
 		{ "klscte35_util",		demo_main, },
 		{ "klscte35_parse",		parse_main, },
+#ifdef HAVE_LIBKLVANC
 		{ "klscte35_scte104",		scte104_main, },
 		{ "klscte35_scte104to35",	scte104to35_main, },
+#endif
 		{ "klscte35_tojson",		scte35tojson_main, },
 		{ "klscte35_tobase64",		scte35tobase64_main, },
 		{ 0, 0 },
