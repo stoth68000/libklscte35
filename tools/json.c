@@ -43,7 +43,7 @@ static int parse(const uint8_t *sec, int byteCount)
 
 		char *buf;
 		uint16_t byteCount;
-		int ret = scte35_create_json_message(s, &buf, &byteCount);
+		int ret = scte35_create_json_message(s, &buf, &byteCount, 0);
 		if (ret == 0) {
 			printf("JSON formatted message : ");
 			printf("%s\n", buf);

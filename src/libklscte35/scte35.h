@@ -374,11 +374,12 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
  * @param[in]	char **buf - NULL terminated string will be allocated and pointer returned here
  * @param[in]	uint16_t *byteCount - Length of buf pointer will be returned here
  * @param[in]	uint64_t pts - Current PTS of SCTE-35 splice (used for SCTE-104 pre-roll calculation)
+ * @param[in]	int compressed - Request the output string in a compressed format (else its pretty)
  * @return	0 - Success
  * @return	< 0 - Error
  */
 int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf,
-			       uint16_t *byteCount);
+			       uint16_t *byteCount, int compressed);
 
 /**
  * @brief	Convert SCTE35 to Base64 representation.

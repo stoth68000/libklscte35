@@ -23,7 +23,7 @@
 
 /* This file is only compiled in if json-c isn't include at build time */
 
-int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf, uint16_t *byteCount)
+int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf, uint16_t *byteCount, int compressed)
 {
 	return -KLSCTE35_ERR_NOTSUPPORTED;
 }

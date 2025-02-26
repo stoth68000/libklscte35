@@ -298,7 +298,7 @@ static int json_append_time(struct splice_descriptor *sd, json_object *obj)
 	return 0;
 }
 
-int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf, uint16_t *byteCount)
+int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf, uint16_t *byteCount, int compressed)
 {
 	int ret = -1;
 
@@ -369,7 +369,11 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 		json_object_object_add(jobj, "descriptors", desc_array);
 	}
 
-	*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+	if (compressed) {
+		*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PLAIN));
+	} else {
+		*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+	}
 	*byteCount=strlen(*buf);
 	json_object_put(jobj);
 
