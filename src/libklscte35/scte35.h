@@ -30,7 +30,10 @@
 #define SCTE35_H
 
 #include <stdint.h>
-#include <libklvanc/vanc.h>
+#include <sys/types.h>
+
+/* We use an extern here so we can build successfully even if libklvanc isn't available */
+extern struct klvanc_packet_scte_104_s *pkt;
 
 #ifdef __cplusplus
 extern "C" {
@@ -325,7 +328,7 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
  * @return	< 0 - Error
  */
 ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si,
-	uint8_t *src, uint32_t srcLengthBytes);
+					      const uint8_t *src, uint32_t srcLengthBytes);
 
 /**
  * @brief	TODO - Brief description goes here.
@@ -333,7 +336,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
  * @param[in]	uint8_t *section - Brief description goes here.
  * @param[in]	unsigned int byteCount - Brief description goes here.
  */
-struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount);
+struct scte35_splice_info_section_s *scte35_splice_info_section_parse(const uint8_t *section, unsigned int byteCount);
 
 /**
  * @brief	TODO - Brief description goes here.
@@ -364,6 +367,29 @@ void scte35_splice_info_section_free(struct scte35_splice_info_section_s *s);
  */
 int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_t **buf,
 				  uint16_t *byteCount, uint64_t pts);
+
+/**
+ * @brief	Convert SCTE35 to JSON representation.
+ * @param[in]	struct scte35_splice_info_section_s *s - SCTE-35 packet
+ * @param[in]	char **buf - NULL terminated string will be allocated and pointer returned here
+ * @param[in]	uint16_t *byteCount - Length of buf pointer will be returned here
+ * @param[in]	uint64_t pts - Current PTS of SCTE-35 splice (used for SCTE-104 pre-roll calculation)
+ * @return	0 - Success
+ * @return	< 0 - Error
+ */
+int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **buf,
+			       uint16_t *byteCount);
+
+/**
+ * @brief	Convert SCTE35 to Base64 representation.
+ * @param[in]	struct scte35_splice_info_section_s *s - SCTE-35 packet
+ * @param[out]	char **buf - NULL terminated string will be allocated and pointer returned here
+ * @param[out]	uint16_t *byteCount - Length of buf pointer will be returned here
+ * @return	0 - Success
+ * @return	< 0 - Error
+ */
+int scte35_create_base64_message(struct scte35_splice_info_section_s *s, char **buf,
+				 uint32_t *byteCount);
 
 /**
  * @brief	Return a human readable label for the command type. Eg. SPLICE_NULL.

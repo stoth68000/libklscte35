@@ -1,7 +1,4 @@
 *.o
-tools/klscte35_util
-tools/klscte35_capture
-tools/klscte35_scte104to35
 .deps/
 .libs/
 Makefile.in

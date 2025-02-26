@@ -518,7 +518,7 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 
 }
 
-ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si, uint8_t *src, uint32_t srcLengthBytes)
+ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_s *si, const uint8_t *src, uint32_t srcLengthBytes)
 {
 	uint32_t v;
 
@@ -681,7 +681,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 	return byteCount;
 }
 
-struct scte35_splice_info_section_s *scte35_splice_info_section_parse(uint8_t *section, unsigned int byteCount)
+struct scte35_splice_info_section_s *scte35_splice_info_section_parse(const uint8_t *section, unsigned int byteCount)
 {
 	int ret;
 
