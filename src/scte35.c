@@ -526,7 +526,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		return -KLSCTE35_ERR_INVAL;
 
 	struct klbs_context_s *bs = klbs_alloc();
-	klbs_read_set_buffer(bs, src, srcLengthBytes);
+	klbs_read_set_buffer(bs, (uint8_t *)src, srcLengthBytes);
 
 	si->table_id = klbs_read_bits(bs, 8);
 	if (si->table_id != SCTE35_TABLE_ID) {
