@@ -59,7 +59,12 @@ static int json_generate_splice_insert(const struct scte35_splice_insert_s *si, 
 			}
 		}
 		if (si->program_splice_flag == 0) {
-			/* Component mode, not supported */
+			/* GAP: consistent with the rest of this library --
+			   splice_insert() component mode (Sec 9.7.3) isn't parsed in
+			   the first place (see the GAP comment in
+			   scte35_splice_info_section_unpackFrom(), src/scte35.c), so
+			   there's no per-component data available to emit here even in
+			   principle. */
 		}
 		if (si->duration_flag == 1) {
 			/* break_duration */
@@ -260,7 +265,12 @@ static int json_append_segmentation(struct splice_descriptor *sd, json_object *o
 					       json_object_new_int64(sd->seg_data.device_restrictions));
 		}
 		if (sd->seg_data.program_segmentation_flag == 0) {
-			/* Component mode not supported */
+			/* GAP: unlike the core wire codec (scte35_append_segmentation()/
+			   scte35_parse_segmentation() in src/scte35.c, which do support
+			   component-mode segmentation), the JSON serializer omits
+			   component_count/components[] entirely here -- a component-mode
+			   segmentation_descriptor() parsed from the wire loses that data
+			   when converted to JSON. */
 		}
 		if (sd->seg_data.segmentation_duration_flag == 1) {
 			json_object_object_add(desc, "segmentation_duration",
@@ -268,7 +278,12 @@ static int json_append_segmentation(struct splice_descriptor *sd, json_object *o
 		}
 		json_object_object_add(desc, "segmentation_upid_type",
 				       json_object_new_int64(sd->seg_data.upid_type));
-		/* FIXME: segmentation upid bytes */
+		/* GAP: segmentation_upid_length and the actual upid bytes (Sec
+		   10.3.3.1) are never added to the JSON output -- only upid_type is
+		   present. Same underlying data gap as noted in
+		   scte35_parse_segmentation() (src/scte35.c): the raw bytes are
+		   available in sd->seg_data.upid[]/upid_length, just not emitted
+		   here. */
 
 		json_object_object_add(desc, "segmentation_type_id",
 				       json_object_new_int64(sd->seg_data.type_id));

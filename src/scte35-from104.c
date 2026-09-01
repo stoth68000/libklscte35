@@ -342,7 +342,17 @@ static int scte35_append_104_segmentation(struct klvanc_packet_scte_104_s *pkt, 
 	sd->identifier = 0x43554549; /* CUEI */
 	sd->seg_data.event_id = seg->event_id;
 	sd->seg_data.event_cancel_indicator = seg->event_cancel_indicator;
-	sd->seg_data.program_segmentation_flag = 1; /* FIXME: Component mode */
+	/* GAP: struct klvanc_segmentation_descriptor_request_data (the SCTE-104
+	   MO_INSERT_SEGMENTATION_REQUEST_DATA operation this converts from) has
+	   no component_count/component fields at all, so there's no SCTE-104
+	   input to convert -- this always emits program-level segmentation
+	   (program_segmentation_flag = 1). Note this is a limitation of the
+	   SCTE-104 side specifically: scte35_append_segmentation() in
+	   src/scte35.c *does* support writing real component-mode segmentation
+	   descriptors when program_segmentation_flag == 0 and
+	   component_count/components[] are populated directly through the
+	   public API; that path just isn't reachable from SCTE-104 conversion. */
+	sd->seg_data.program_segmentation_flag = 1;
 	sd->seg_data.delivery_not_restricted_flag = seg->delivery_not_restricted_flag;
 	sd->seg_data.web_delivery_allowed_flag = seg->web_delivery_allowed_flag;
 	sd->seg_data.no_regional_blackout_flag = seg->no_regional_blackout_flag;
@@ -359,6 +369,13 @@ static int scte35_append_104_segmentation(struct klvanc_packet_scte_104_s *pkt, 
 	sd->seg_data.type_id = seg->type_id;
 	sd->seg_data.segment_num = seg->segment_num;
 	sd->seg_data.segments_expected = seg->segments_expected;
+	/* GAP: struct klvanc_segmentation_descriptor_request_data has no
+	   sub_segment_num/sub_segments_expected fields to convert from, so
+	   these are always 0 here regardless of type_id -- moot today since
+	   scte35_append_segmentation() in src/scte35.c doesn't write these
+	   fields at all yet (see the GAP comment there), but would still be
+	   wrong input for a Provider/Distributor Placement Opportunity Start
+	   (type_id 0x34/0x36) once that's fixed. */
 	sd->seg_data.sub_segment_num = 0;
 	sd->seg_data.sub_segments_expected = 0;
 

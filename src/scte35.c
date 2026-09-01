@@ -101,6 +101,16 @@ static const char *scte35_seg_device_restrictions(uint8_t val) {
 
 static const char *scte35_seg_upid_type(uint8_t upid_type) {
 	/* SCTE-35:2019 Table 21 */
+	/* GAP: this table only covers upid_type 0x00-0x09. Every later-edition
+	   type -- at least 0x0A EIDR, 0x0B ATSC Content Identifier, 0x0C MPU(),
+	   0x0D MID() (nested sub-UPID list), 0x0E ADS Information, 0x0F URI,
+	   0x10 UUID (SMPTE 2092-1), and whatever a given edition adds beyond
+	   that -- falls through to "Reserved" here even though it's a defined,
+	   named type in the spec. This is purely a human-readable-label gap:
+	   the underlying upid bytes are still stored/round-tripped correctly
+	   regardless of type (see the GAP comment on segmentation_upid_type in
+	   scte35_parse_segmentation()); only this descriptive string is wrong
+	   for those types. */
 	switch(upid_type) {
 	case 0x00: return "Not Used";
 	case 0x01: return "User Defined (Deprecated)";
@@ -561,6 +571,19 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 
 	si->section_length = klbs_read_bits(bs, 12);
 
+	/* GAP/ASSUMPTION: unlike scte35_splice_info_section_packTo() (which
+	   rejects any nonzero protocol_version, encrypted_packet or
+	   encryption_algorithm), this parser does not reject them here -- it
+	   reads and stores whatever values are present and then keeps parsing
+	   the command/descriptor loop as if the section were unencrypted,
+	   protocol_version 0. For a genuinely encrypted section (Sec 9.6) this
+	   means the "splice_command" bytes are actually ciphertext that gets
+	   misinterpreted as a real command, alignment_stuffing()/E_CRC_32
+	   (present before the final CRC_32 in that case) are never skipped, so
+	   the trailing crc_32 field itself is read from the wrong offset. The
+	   net effect is usually (not guaranteed) crc_32_is_valid == 0 and a
+	   struct full of garbage rather than a clean rejection -- callers must
+	   check si->encrypted_packet themselves if they need to detect this. */
 	si->protocol_version = klbs_read_bits(bs, 8);
 	si->encrypted_packet = klbs_read_bits(bs, 1);
 	si->encryption_algorithm = klbs_read_bits(bs, 6);
@@ -577,6 +600,13 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
+		/* GAP (SCTE-35 Sec 9.7.2): splice_schedule() is a real, spec-defined
+		   command -- a list of splice_event()s scheduled for future UTC
+		   splice_time()s -- not merely a reserved/unused command_type. This
+		   library has no struct to hold it and cannot parse it at all;
+		   any section using it is rejected outright rather than degraded
+		   gracefully (e.g. by skipping the command and still parsing
+		   descriptors). */
 		klbs_free(bs);
 		return -KLSCTE35_ERR_NOTSUPPORTED;
 	} else
@@ -605,7 +635,17 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 					klbs_read_bits(bs, 7); /* Reserved */
 			}
 			if (i->program_splice_flag == 0) {
-				/* TODO: We don't support component counts, write fixed values */
+				/* GAP (SCTE-35 Sec 9.7.3): program_splice_flag == 0 means this
+				   is a per-component splice -- the wire format here is
+				   component_count(8) followed by that many
+				   {component_tag(8), splice_time()} entries (splice_time()
+				   only present if splice_immediate_flag == 0), not a single
+				   fixed byte. This library reads and discards one byte and
+				   stops; any component_tag/splice_time data that follows is
+				   left unparsed, and si->splice_insert.component_count /
+				   .components[] (see scte35.h) are never populated. A
+				   program_splice_flag == 0 splice_insert() does not
+				   round-trip correctly through this library. */
 				klbs_read_bits(bs, 8);
 			}
 			if (i->duration_flag == 1) {
@@ -677,8 +717,10 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 					 si->descriptor_loop_length);
 	}
 
-	/* We don't support encryption so we dont need alignment stuffing */
-	/* We don't support encrypted_packets so we dont need e_crc_32 */
+	/* GAP (SCTE-35 Sec 9.6): alignment_stuffing() and E_CRC_32, which the spec
+	   requires here when encrypted_packet == 1, are never read -- see the GAP
+	   comment on the protocol_version/encrypted_packet reads above for how
+	   that silently misaligns parsing of an actually-encrypted section. */
 	si->e_crc_32 = 0;
 
 	/* Checksum */
@@ -874,14 +916,18 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 			klbs_write_bits(bs, 0x1f, 5); /* Reserved */
 		}
 		if (seg->program_segmentation_flag == 0) {
+			/* Component mode (Sec 10.3.3) IS implemented here, unlike
+			   splice_insert()'s program_splice_flag == 0 case above -- this
+			   writes the real component_count + per-component
+			   {component_tag, pts_offset} loop from seg->component_count/
+			   .components[]. (An earlier version of this comment claimed
+			   otherwise; that was stale/incorrect.) */
 			klbs_write_bits(bs, seg->component_count, 8);
 			for (int i = 0; i < seg->component_count; i++) {
 				klbs_write_bits(bs, seg->components[i].component_tag, 8);
 				klbs_write_bits(bs, 0x7f, 7); /* Reserved */
 				klbs_write_bits(bs, seg->components[i].pts_offset, 33);
 			}
-
-			/* FIXME: Component mode not currently supported */
 		}
 		if (seg->segmentation_duration_flag) {
 			klbs_write_bits(bs, seg->segmentation_duration, 40);
@@ -895,7 +941,12 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 		klbs_write_bits(bs, seg->segment_num, 8);
 		klbs_write_bits(bs, seg->segments_expected, 8);
 		if (seg->type_id == 0x34 || seg->type_id == 0x36) {
-			/* FIXME: Sub segment num */
+			/* GAP (SCTE-35 Sec 10.3.3): for Provider/Distributor Placement
+			   Opportunity Start, the spec requires sub_segment_num(8) and
+			   sub_segments_expected(8) here. Neither is written -- whatever
+			   a caller set in seg->sub_segment_num/.sub_segments_expected
+			   (see scte35.h) is silently dropped, producing a
+			   non-compliant (2 bytes short) descriptor for this type_id. */
 		}
 	}
 	klbs_write_buffer_complete(bs);
@@ -938,6 +989,12 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 			seg->archive_allowed_flag = klbs_read_bits(bs, 1);
 			seg->device_restrictions =  klbs_read_bits(bs, 2);
 		} else {
+			/* ASSUMPTION: these 3 flags + device_restrictions aren't on the
+			   wire when delivery_not_restricted_flag == 1 (just the 5
+			   reserved bits below) -- fabricating "fully allowed" values
+			   here is this library's interpretation of "not restricted",
+			   not a transmitted value. See scte35.h,
+			   struct splice_descriptor_segmentation. */
 			klbs_read_bits(bs, 5); /* Reserved */
 			seg->web_delivery_allowed_flag = 1;
 			seg->no_regional_blackout_flag = 1;
@@ -957,6 +1014,11 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 		}
 		seg->upid_type = klbs_read_bits(bs, 8);
 		seg->upid_length = klbs_read_bits(bs, 8);
+		/* GAP (SCTE-35 Sec 10.3.3.1): segmentation_upid() is stored as an
+		   opaque blob here regardless of upid_type -- no length validation
+		   against type-specific fixed sizes, and upid_type 0x0D (MID, a
+		   nested list of sub-UPIDs) is not expanded. See scte35.h,
+		   struct splice_descriptor_segmentation, field "upid". */
 		for (int i = 0; i < seg->upid_length; i++) {
 			seg->upid[i] = klbs_read_bits(bs, 8);
 		}
@@ -964,7 +1026,12 @@ int scte35_parse_segmentation(struct splice_descriptor *desc, uint8_t *buf, unsi
 		seg->segment_num = klbs_read_bits(bs, 8);
 		seg->segments_expected = klbs_read_bits(bs, 8);
 		if (seg->type_id == 0x34 || seg->type_id == 0x36) {
-			/* FIXME: Sub segment num */
+			/* GAP (SCTE-35 Sec 10.3.3): sub_segment_num(8) and
+			   sub_segments_expected(8) are mandatory here for Provider/
+			   Distributor Placement Opportunity Start but are never read --
+			   seg->sub_segment_num/.sub_segments_expected are left at
+			   whatever they were before this call (0 for a freshly
+			   allocated/calloc'd struct) rather than the wire values. */
 		}
 	}
 
@@ -1125,7 +1192,9 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE) {
-		/* TODO: Not supported */
+		/* GAP (SCTE-35 Sec 9.7.2): splice_schedule() is not implemented --
+		   see the matching comment in scte35_splice_info_section_unpackFrom()
+		   above. */
 		klbs_free(bs);
 		return -KLSCTE35_ERR_NOTSUPPORTED;
 	} else
@@ -1152,7 +1221,12 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 					klbs_write_bits(bs, 0xff, 7); /* Reserved */
 			}
 			if (i->program_splice_flag == 0) {
-				/* TODO: We don't support component counts, write fixed values */
+				/* GAP (SCTE-35 Sec 9.7.3): component splicing isn't
+				   supported -- see the matching comment in
+				   scte35_splice_info_section_unpackFrom() above. Whatever a
+				   caller set in si->splice_insert.component_count/
+				   .components[] is ignored; a fixed 0 (component_count) is
+				   always written instead. */
 				klbs_write_bits(bs, 0, 8);
 			}
 			if (i->duration_flag == 1) {
@@ -1242,8 +1316,11 @@ int scte35_splice_info_section_packTo(struct scte35_splice_info_section_s *si, u
 		klbs_write_bits(bs, si->splice_descriptor[i], 8);
 	}
 
-	/* We don't support encryption so we dont need alignment stuffing */
-	/* We don't support encrypted_packets so we dont need e_crc_32 */
+	/* GAP (SCTE-35 Sec 9.6): alignment_stuffing() and E_CRC_32 are never
+	   written -- moot here since encrypted_packet != 0 was already rejected
+	   above, but see the matching comment in
+	   scte35_splice_info_section_unpackFrom() for the parse-side gap this
+	   creates (that function doesn't reject it). */
 	si->e_crc_32 = 0;
 
 	si->section_length = klbs_get_byte_count(bs)
