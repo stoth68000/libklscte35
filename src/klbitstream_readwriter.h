@@ -130,14 +130,18 @@ static __inline__ void klbs_write_set_buffer(struct klbs_context_s *ctx, uint8_t
 
 /**
  * @brief       Associate a previously allocated user buffer 'buf' with the bitstream context.
- *              The context will read data directly from this user buffer.
+ *              The context will read data directly from this user buffer. The buffer is
+ *              never written through in read mode, so callers may pass a const pointer
+ *              without casting.
  * @param[in]   struct klbs_context_s *ctx  bitstream context
- * @param[in]   uint8_t *buf  Buffer the bistream will read from.
+ * @param[in]   const uint8_t *buf  Buffer the bistream will read from.
  * @param[in]   uint32_t *buf  Buffer size in bytes.
  */
-static __inline__ void klbs_read_set_buffer(struct klbs_context_s *ctx, uint8_t *buf, uint32_t lengthBytes)
+static __inline__ void klbs_read_set_buffer(struct klbs_context_s *ctx, const uint8_t *buf, uint32_t lengthBytes)
 {
-	klbs_write_set_buffer(ctx, buf, lengthBytes);
+	/* Single, well-contained cast: a context set up via this function is
+	   only ever used for reads, so ctx->buf is never written through. */
+	klbs_write_set_buffer(ctx, (uint8_t *)buf, lengthBytes);
 }
 
 /**

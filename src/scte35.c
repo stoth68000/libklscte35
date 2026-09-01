@@ -380,8 +380,13 @@ void scte35_splice_info_section_print(struct scte35_splice_info_section_s *s)
 				SHOW_LINE_U32("\t", sd->dtmf_data.preroll);
 				SHOW_LINE_U32("\t", sd->dtmf_data.dtmf_count);
 				printf("\tsd->dtmf_data.dtmf_char = [");
-				for (int j = 0; j < sd->dtmf_data.dtmf_count; j++) {
-					printf("%c", sd->dtmf_data.dtmf_char[i]);
+				{
+					int dtmf_n = sd->dtmf_data.dtmf_count;
+					if (dtmf_n > (int)sizeof(sd->dtmf_data.dtmf_char))
+						dtmf_n = (int)sizeof(sd->dtmf_data.dtmf_char);
+					for (int j = 0; j < dtmf_n; j++) {
+						printf("%c", sd->dtmf_data.dtmf_char[j]);
+					}
 				}
 				printf("]\n");
 				break;
@@ -472,6 +477,12 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			break;
 
 		sd->descriptor_length = klbs_read_bits(bs, 8); /* Descriptor Length */
+		if (sd->descriptor_length < 4) {
+			/* Malformed: descriptor_length must cover at least the
+			   mandatory 32-bit "identifier" field that follows. */
+			free(sd);
+			break;
+		}
 		sd->identifier = klbs_read_bits(bs, 32);
 		priv_len = sd->descriptor_length - 4;
 		for (int i = 0; i < priv_len; i++) {
@@ -526,7 +537,7 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		return -KLSCTE35_ERR_INVAL;
 
 	struct klbs_context_s *bs = klbs_alloc();
-	klbs_read_set_buffer(bs, (uint8_t *)src, srcLengthBytes);
+	klbs_read_set_buffer(bs, src, srcLengthBytes);
 
 	si->table_id = klbs_read_bits(bs, 8);
 	if (si->table_id != SCTE35_TABLE_ID) {
@@ -630,6 +641,10 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 		/* Nothing to do */
 	} else
 	if (si->splice_command_type == SCTE35_COMMAND_TYPE__PRIVATE) {
+		if (si->splice_command_length < 4) {
+			klbs_free(bs);
+			return -KLSCTE35_ERR_INVAL;
+		}
 		si->private_command.identifier = klbs_read_bits(bs, 32);
 		si->private_command.private_length = si->splice_command_length - 4;
 		for (int i = 0; i < si->private_command.private_length; i++) {
@@ -751,8 +766,13 @@ int scte35_append_avail(struct scte35_splice_info_section_s *si, struct splice_d
 	buffer[1] = klbs_get_byte_count(bs) - 2;
 
 	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	uint8_t *newbuf = realloc(si->splice_descriptor,
+				  klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	if (!newbuf) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOMEM;
+	}
+	si->splice_descriptor = newbuf;
 	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 
@@ -784,16 +804,24 @@ int scte35_append_dtmf(struct scte35_splice_info_section_s *si, struct splice_de
 	klbs_write_bits(bs, 0x00, 8); // Length, fill out afterward
 	klbs_write_bits(bs, desc->identifier, 32);
 	klbs_write_bits(bs, desc->dtmf_data.preroll, 8);
-	klbs_write_bits(bs, desc->dtmf_data.dtmf_count, 3);
+	int dtmf_n = desc->dtmf_data.dtmf_count;
+	if (dtmf_n > (int)sizeof(desc->dtmf_data.dtmf_char))
+		dtmf_n = (int)sizeof(desc->dtmf_data.dtmf_char);
+	klbs_write_bits(bs, dtmf_n, 3);
 	klbs_write_bits(bs, 0x1f, 5); /* Reserved */
-	for (int i = 0; i < desc->dtmf_data.dtmf_count; i++) {
+	for (int i = 0; i < dtmf_n; i++) {
 		klbs_write_bits(bs, desc->dtmf_data.dtmf_char[i], 8);
 	}
 	buffer[1] = klbs_get_byte_count(bs) - 2;
 
 	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	uint8_t *newbuf = realloc(si->splice_descriptor,
+				  klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	if (!newbuf) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOMEM;
+	}
+	si->splice_descriptor = newbuf;
 	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 
@@ -875,8 +903,13 @@ int scte35_append_segmentation(struct scte35_splice_info_section_s *si, struct s
 	buffer[1] = klbs_get_byte_count(bs) - 2;
 
 	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	uint8_t *newbuf = realloc(si->splice_descriptor,
+				  klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	if (!newbuf) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOMEM;
+	}
+	si->splice_descriptor = newbuf;
 	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 
@@ -954,8 +987,13 @@ int scte35_append_time(struct scte35_splice_info_section_s *si, struct splice_de
 	buffer[1] = klbs_get_byte_count(bs) - 2;
 
 	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	uint8_t *newbuf = realloc(si->splice_descriptor,
+				  klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	if (!newbuf) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOMEM;
+	}
+	si->splice_descriptor = newbuf;
 	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 
@@ -1004,8 +1042,13 @@ int scte35_append_descriptor(struct scte35_splice_info_section_s *si, struct spl
 	}
 
 	/* Append to splice_descriptor (creating if not already allocated) */
-	si->splice_descriptor = realloc(si->splice_descriptor,
-					klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	uint8_t *newbuf = realloc(si->splice_descriptor,
+				  klbs_get_byte_count(bs) + si->descriptor_loop_length);
+	if (!newbuf) {
+		klbs_free(bs);
+		return -KLSCTE35_ERR_NOMEM;
+	}
+	si->splice_descriptor = newbuf;
 	memcpy(si->splice_descriptor + si->descriptor_loop_length, buffer, klbs_get_byte_count(bs));
 	si->descriptor_loop_length += klbs_get_byte_count(bs);
 

@@ -815,6 +815,134 @@ static void test_critical_regressions(void)
 	run_isolated("CRITICAL#5 scte35_splice_info_section_parse() NULL guard", child_critical5_parse_null);
 }
 
+/* ------------------------------------------------------------------- */
+/* MODERATE #6: descriptor_length/splice_command_length underflow.      */
+/* scte35_parse_descriptors() and the PRIVATE command branch of         */
+/* scte35_splice_info_section_unpackFrom() both computed a length by    */
+/* subtracting 4 from an attacker-controlled wire field without first   */
+/* checking it was >= 4, letting the subtraction wrap around. The       */
+/* out-of-bounds *read* this used to enable is now safely refused by    */
+/* the CRITICAL#4 fix, but the malformed input should be rejected       */
+/* outright rather than silently "succeeding" with a garbage length.    */
+/* ------------------------------------------------------------------- */
+static void test_parse_descriptors_length_validation(void)
+{
+	SECTION("scte35_parse_descriptors() descriptor_length validation");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
+	CHECK(si != NULL, "alloc SPLICE_NULL for descriptor length test");
+	if (!si)
+		return;
+
+	/* tag=0xEE, descriptor_length=2 (invalid -- must be >= 4 to cover the
+	   mandatory 32-bit "identifier" field that follows it). */
+	uint8_t buf[6] = { 0xEE, 0x02, 'A', 'B', 'C', 'D' };
+
+	ssize_t ret = scte35_parse_descriptors(si, buf, sizeof(buf));
+	CHECK(ret == 0, "scte35_parse_descriptors returns cleanly");
+	CHECK(si->descriptor_loop_count == 0,
+	      "malformed descriptor (length < 4) is rejected, not appended (count=%d)",
+	      si->descriptor_loop_count);
+
+	scte35_splice_info_section_free(si);
+}
+
+static void test_private_command_length_validation(void)
+{
+	SECTION("PRIVATE command splice_command_length validation");
+
+	/* Hand-build just enough of a splice_info_section header to reach the
+	   PRIVATE command branch, with splice_command_length deliberately set
+	   below the 4 bytes needed for the mandatory "identifier" field. We
+	   don't need a valid CRC or descriptor loop -- unpackFrom() must
+	   reject this before it ever reads that far. */
+	uint8_t raw[16];
+	memset(raw, 0, sizeof(raw));
+
+	struct klbs_context_s *bs = klbs_alloc();
+	CHECK(bs != NULL, "klbs_alloc succeeds");
+	if (!bs)
+		return;
+
+	klbs_write_set_buffer(bs, raw, sizeof(raw));
+	klbs_write_bits(bs, SCTE35_TABLE_ID, 8);
+	klbs_write_bits(bs, 0, 1);              /* section_syntax_indicator */
+	klbs_write_bits(bs, 0, 1);              /* private_indicator */
+	klbs_write_bits(bs, 0x3, 2);            /* reserved */
+	klbs_write_bits(bs, 0, 12);             /* section_length (unchecked by unpackFrom) */
+	klbs_write_bits(bs, 0, 8);              /* protocol_version */
+	klbs_write_bits(bs, 0, 1);              /* encrypted_packet */
+	klbs_write_bits(bs, 0, 6);              /* encryption_algorithm */
+	klbs_write_bits(bs, 0, 33);             /* pts_adjustment */
+	klbs_write_bits(bs, 0, 8);              /* cw_index */
+	klbs_write_bits(bs, 0xFFF, 12);         /* tier */
+	klbs_write_bits(bs, 2, 12);             /* splice_command_length -- deliberately < 4 */
+	klbs_write_bits(bs, SCTE35_COMMAND_TYPE__PRIVATE, 8); /* splice_command_type */
+	klbs_write_buffer_complete(bs);
+
+	int len = klbs_get_byte_count(bs);
+	klbs_free(bs);
+
+	struct scte35_splice_info_section_s si;
+	memset(&si, 0, sizeof(si));
+	ssize_t ret = scte35_splice_info_section_unpackFrom(&si, raw, len);
+	CHECK(ret == -KLSCTE35_ERR_INVAL,
+	      "unpackFrom rejects a PRIVATE command with splice_command_length < 4 (ret=%zd)", ret);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #8/#11: scte35_append_dtmf() (src/scte35.c) trusted          */
+/* dtmf_count -- a plain public uint8_t field, 0-255 -- as a loop bound  */
+/* over both dtmf_char[8] and the descriptor's fixed 256-byte staging   */
+/* buffer when serializing. dtmf_count=255 overflows that stack buffer. */
+/* ------------------------------------------------------------------- */
+static void child_moderate8_dtmf_serialize_overflow(void)
+{
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		_exit(2);
+	si->time_signal.time_specified_flag = 1;
+	si->time_signal.pts_time = 900000;
+
+	struct splice_descriptor *sd;
+	if (alloc_SCTE_35_splice_descriptor(SCTE35_DTMF_DESCRIPTOR, &sd) != 0)
+		_exit(3);
+	sd->identifier = 0x43554549;
+	sd->dtmf_data.preroll = 1;
+	sd->dtmf_data.dtmf_count = 255; /* out-of-spec (wire field is 3 bits, max 7),
+					    but nothing stops a caller from setting it */
+	memset(sd->dtmf_data.dtmf_char, 'X', sizeof(sd->dtmf_data.dtmf_char));
+	si->descriptors[si->descriptor_loop_count++] = sd;
+
+	uint8_t out[4096];
+	int len = scte35_splice_info_section_packTo(si, out, sizeof(out));
+	if (len <= 0)
+		_exit(4);
+
+	struct scte35_splice_info_section_s *rt = scte35_splice_info_section_parse(out, len);
+	if (!rt)
+		_exit(5);
+
+	int ok = (rt->descriptor_loop_count == 1) &&
+		 (rt->descriptors[0]->dtmf_data.dtmf_count <= sizeof(sd->dtmf_data.dtmf_char));
+
+	scte35_splice_info_section_free(rt);
+	scte35_splice_info_section_free(si);
+
+	if (!ok)
+		_exit(6);
+	_exit(0);
+}
+
+static void test_moderate_regressions(void)
+{
+	SECTION("Moderate issue regressions");
+
+	test_parse_descriptors_length_validation();
+	test_private_command_length_validation();
+	run_isolated("MODERATE#8 scte35_append_dtmf() stack buffer", child_moderate8_dtmf_serialize_overflow);
+}
+
 #ifdef HAVE_LIBKLVANC
 /* ------------------------------------------------------------------- */
 /* scte35_generate_from_scte104() -- decode a real SCTE-104 VANC line  */
@@ -876,6 +1004,33 @@ static int scte104_rt_cb(void *callback_context, struct klvanc_context_s *ctx,
 	}
 
 	return 0;
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #9: scte35_create_scte104_message() (src/scte35-to104.c)    */
+/* leaked its klvanc context/packet on two error paths -- an           */
+/* unsupported command type, and (untestable without fault injection)  */
+/* klvanc_alloc_SCTE_104() failure. This exercises the reachable one:   */
+/* SPLICE_SCHEDULE is a valid alloc()-able command type but has no      */
+/* SCTE-104 equivalent, so it falls into the "unsupported" branch.      */
+/* There's no portable way to assert "did not leak" from within the     */
+/* test itself; run the suite under a leak checker (e.g. `leaks` on     */
+/* macOS, or valgrind) to confirm.                                      */
+/* ------------------------------------------------------------------- */
+static void test_scte104_unsupported_command_type(void)
+{
+	SECTION("scte35_create_scte104_message() unsupported command type (leak check)");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE);
+	CHECK(si != NULL, "alloc SPLICE_SCHEDULE (unsupported by SCTE-104 conversion)");
+	if (si) {
+		uint8_t *buf = NULL;
+		uint16_t byteCount = 0;
+		int ret = scte35_create_scte104_message(si, &buf, &byteCount, TEST_PTS_TIME);
+		CHECK(ret == -1, "returns -1 for an unsupported command type");
+		CHECK(buf == NULL, "does not populate the output buffer on failure");
+		scte35_splice_info_section_free(si);
+	}
 }
 
 static void test_scte104_from_vanc(void)
@@ -1103,10 +1258,12 @@ int test_api_main(int argc, char *argv[])
 	test_crc32();
 	test_negative_inputs();
 	test_critical_regressions();
+	test_moderate_regressions();
 #ifdef HAVE_LIBKLVANC
 	test_scte104_from_vanc();
 	test_scte104_to_scte35_closed_loop();
 	run_isolated("CRITICAL#3 scte35_generate_from_scte104() descriptor bounds", child_critical3_from104_descriptor_overflow);
+	test_scte104_unsupported_command_type();
 #else
 	printf("\n=== SCTE-104 conversion tests ===\n");
 	printf("  [SKIP] built without libklvanc support\n");
