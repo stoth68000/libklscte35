@@ -41,6 +41,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <libklscte35/scte35.h>
 #include "base64.h"
@@ -553,6 +554,82 @@ static void test_json(void)
 	}
 
 	scte35_splice_info_section_free(si);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #10: scte35_create_json_message() (src/scte35-tojson.c)     */
+/* leaked the in-progress json_object tree ("jobj") when the command    */
+/* type wasn't one of the ones it knows how to serialize. SPLICE_      */
+/* SCHEDULE is a valid scte35_splice_info_section_alloc() command type  */
+/* but has no case in the JSON switch, so it falls into that path.      */
+/* There's no portable way to assert "did not leak" from inside the     */
+/* test itself; run the suite under a leak checker to confirm (the      */
+/* fix itself is a one-line json_object_put() before the early return). */
+/* ------------------------------------------------------------------- */
+static void test_json_unsupported_command_type_leak(void)
+{
+	SECTION("scte35_create_json_message() unsupported command type (leak check)");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE);
+	CHECK(si != NULL, "alloc SPLICE_SCHEDULE (unsupported by JSON conversion)");
+	if (!si)
+		return;
+
+	char *buf = NULL;
+	uint16_t byteCount = 0;
+	int ret = scte35_create_json_message(si, &buf, &byteCount, 1);
+
+	if (ret == -KLSCTE35_ERR_NOTSUPPORTED) {
+		printf("  [SKIP] json-c not compiled in; scte35_create_json_message() correctly reports NOTSUPPORTED\n");
+		g_pass++;
+	} else {
+		CHECK(ret == -1, "returns -1 for an unsupported command type");
+		CHECK(buf == NULL, "does not populate the output buffer on failure");
+	}
+
+	if (buf)
+		free(buf);
+	scte35_splice_info_section_free(si);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #12: scte35_create_json_message() didn't check strdup()'s   */
+/* result before strlen()'ing it, which would NULL-deref-crash on an    */
+/* allocation failure. Genuinely forcing malloc/strdup to fail isn't    */
+/* portable without allocator interposition, so this is a best-effort   */
+/* attempt: cap the child's address space very low with setrlimit()     */
+/* before calling in. Whether or not that actually starves the          */
+/* allocator on a given platform, the one property that must always     */
+/* hold -- and is what the fix guarantees -- is that the call never     */
+/* crashes and its return code and output pointer are consistent.       */
+/* ------------------------------------------------------------------- */
+static void child_moderate12_json_oom(void)
+{
+	struct rlimit rl = { 8 * 1024 * 1024, 8 * 1024 * 1024 }; /* 8MB address space */
+	setrlimit(RLIMIT_AS, &rl);
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		_exit(0); /* alloc itself failed under the limit -- not a crash, still fine */
+
+	si->time_signal.time_specified_flag = 1;
+	si->time_signal.pts_time = 900000;
+
+	char *buf = NULL;
+	uint16_t byteCount = 0;
+	int ret = scte35_create_json_message(si, &buf, &byteCount, 1);
+
+	/* Whatever happened, it must be internally consistent: success implies
+	   a real buffer, failure implies no buffer -- never a NULL buffer
+	   reported as success (which is exactly what used to crash on the
+	   following strlen()). */
+	int ok = (ret == 0) ? (buf != NULL) : (buf == NULL);
+
+	if (buf)
+		free(buf);
+	scte35_splice_info_section_free(si);
+
+	_exit(ok ? 0 : 4);
 }
 
 /* ------------------------------------------------------------------- */
@@ -1255,6 +1332,8 @@ int test_api_main(int argc, char *argv[])
 	test_descriptor_roundtrip();
 	test_base64();
 	test_json();
+	test_json_unsupported_command_type_leak();
+	run_isolated("MODERATE#12 scte35_create_json_message() OOM handling", child_moderate12_json_oom);
 	test_crc32();
 	test_negative_inputs();
 	test_critical_regressions();
