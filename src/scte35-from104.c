@@ -192,6 +192,9 @@ static int scte35_append_104_descriptor(struct klvanc_packet_scte_104_s *pkt, in
 
 	si = splices[*outSpliceNum - 1];
 
+	if (si->descriptor_loop_count >= SCTE35_MAX_DESCRIPTORS)
+		return -1;
+
 	ret = alloc_SCTE_35_splice_descriptor(des->descriptor_bytes[0], &sd);
 	if (ret != 0)
 		return -1;
@@ -231,7 +234,7 @@ static int scte35_append_104_dtmf(struct klvanc_packet_scte_104_s *pkt, int momO
 
 	si = splices[*outSpliceNum - 1];
 
-	if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
+	if (si->descriptor_loop_count >= SCTE35_MAX_DESCRIPTORS) {
 		return -1;
 	}
 
@@ -283,7 +286,7 @@ static int scte35_append_104_avail(struct klvanc_packet_scte_104_s *pkt, int mom
 	/* We need to create an SCTE-35 descriptor for each Avail listed in the
 	   MOM Operation */
 	for (int j = 0; j < op->avail_descriptor_data.num_provider_avails; j++) {
-		if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
+		if (si->descriptor_loop_count >= SCTE35_MAX_DESCRIPTORS) {
 			return -1;
 		}
 
@@ -328,7 +331,7 @@ static int scte35_append_104_segmentation(struct klvanc_packet_scte_104_s *pkt, 
 		return -1;
 	}
 
-	if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
+	if (si->descriptor_loop_count >= SCTE35_MAX_DESCRIPTORS) {
 		return -1;
 	}
 
@@ -412,6 +415,9 @@ static int scte35_append_104_time(struct klvanc_packet_scte_104_s *pkt, int momO
 		/* There was no splice earlier in the MOM to append to */
 		return -1;
 	}
+
+	if (si->descriptor_loop_count >= SCTE35_MAX_DESCRIPTORS)
+		return -1;
 
 	ret = alloc_SCTE_35_splice_descriptor(SCTE35_TIME_DESCRIPTOR, &sd);
 	if (ret != 0)

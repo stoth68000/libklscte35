@@ -11,7 +11,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <assert.h>
 
 #ifndef KLBITSTREAM_READWRITER_H
 #define KLBITSTREAM_READWRITER_H
@@ -28,6 +27,11 @@ struct klbs_context_s
 	/* Write bits are clocked in from LSB. */
 	/* Read bits are clocked out from the MSB. */
 	uint8_t  reg;
+
+	/* Set to 1 the first time a read or write attempts to go past buflen.
+	   Once set, further reads return 0 bits and further writes are
+	   silently dropped -- the buffer is never dereferenced out of bounds. */
+	uint8_t  overflow;
 };
 
 /**
@@ -55,6 +59,14 @@ struct klbs_context_s
  * @return      Buffer address.
  */
 #define klbs_get_buffer_size(ctx) ((ctx)->buflen)
+
+/**
+ * @brief       Helper Macro. Returns non-zero if a prior read or write
+ *              attempted to go past the end of the associated buffer.
+ * @param[in]   struct klbs_context_s *ctx  bitstream context
+ * @return      Non-zero if the buffer was overrun, zero otherwise.
+ */
+#define klbs_has_overflowed(ctx) ((ctx)->overflow)
 
 /**
  * @brief       Allocate a new bitstream context, for read or write use.
@@ -135,8 +147,6 @@ static __inline__ void klbs_read_set_buffer(struct klbs_context_s *ctx, uint8_t 
  */
 static __inline__ void klbs_write_bit(struct klbs_context_s *ctx, uint32_t bit)
 {
-	assert(ctx->buflen_used <= ctx->buflen);
-
 	bit &= 1;
 	if (ctx->reg_used < 8) {
 		ctx->reg <<= 1;
@@ -145,7 +155,13 @@ static __inline__ void klbs_write_bit(struct klbs_context_s *ctx, uint32_t bit)
 	}
 
 	if (ctx->reg_used == 8) {
-		*(ctx->buf + ctx->buflen_used++) = ctx->reg;
+		if (ctx->buflen_used < ctx->buflen) {
+			*(ctx->buf + ctx->buflen_used++) = ctx->reg;
+		} else {
+			/* Buffer is full -- drop the byte instead of writing past
+			   the end of the caller's allocation. */
+			ctx->overflow = 1;
+		}
 		ctx->reg_used = 0;
 	}
 }
@@ -196,10 +212,16 @@ static __inline__ void klbs_write_buffer_complete(struct klbs_context_s *ctx)
 static __inline__ uint32_t klbs_read_bit(struct klbs_context_s *ctx)
 {
 	uint32_t bit = 0;
-	assert(ctx->buflen_used <= ctx->buflen);
 
 	if (ctx->reg_used == 0) {
-		ctx->reg = *(ctx->buf + ctx->buflen_used++);
+		if (ctx->buflen_used < ctx->buflen) {
+			ctx->reg = *(ctx->buf + ctx->buflen_used++);
+		} else {
+			/* Buffer exhausted -- return zero bits instead of reading
+			   past the end of the caller's allocation. */
+			ctx->reg = 0;
+			ctx->overflow = 1;
+		}
 		ctx->reg_used = 8;
 	}
 

@@ -503,7 +503,7 @@ ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_
 			ret = scte35_parse_descriptor(sd, buf, priv_len);
 		}
 
-		if (ret == 0) {
+		if (ret == 0 && si->descriptor_loop_count < SCTE35_MAX_DESCRIPTORS) {
 			si->descriptors[si->descriptor_loop_count++] = sd;
 		} else {
 			free(sd);
@@ -684,6 +684,9 @@ ssize_t scte35_splice_info_section_unpackFrom(struct scte35_splice_info_section_
 struct scte35_splice_info_section_s *scte35_splice_info_section_parse(const uint8_t *section, unsigned int byteCount)
 {
 	int ret;
+
+	if (!section || byteCount == 0)
+		return NULL;
 
 	if (*(section + 0) != SCTE35_TABLE_ID)
 		return NULL;

@@ -29,6 +29,12 @@
         "depcomp": true,
         // Binaries that we generate
         "tools/klscte35_parse": true,
+        "tools/klscte35_scte104": true,
+        "tools/klscte35_scte104to35": true,
+        "tools/klscte35_test_api": true,
+        "tools/klscte35_tobase64": true,
+        "tools/klscte35_tojson": true,
+        "tools/klscte35_util": true,
     }
 
 }
