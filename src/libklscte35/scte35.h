@@ -24,6 +24,97 @@
  * @author	Steven Toth <stoth@kernellabs.com>
  * @copyright	Copyright (c) 2016-2017 Kernel Labs Inc. All Rights Reserved.
  * @brief	Pack, unpack DVB SCTE35 table sections. Helper functions to create common table types.
+ *
+ * SPEC COMPLIANCE SUMMARY (checked against ANSI/SCTE 35:2019, "Digital
+ * Program Insertion Cueing Message for Cable"; section numbers below refer
+ * to that edition unless noted). This is a deliberate subset of the spec,
+ * not a full implementation. Each GAP/ASSUMPTION callout below has a
+ * matching, more detailed comment at the point in the .c files where it
+ * actually applies -- this block is the index.
+ *
+ * GAPS (spec-defined behavior this library does not implement):
+ *
+ *  - splice_schedule() (Sec 9.7.2, splice_command_type 0x04) is not
+ *    implemented at all. Both scte35_splice_info_section_unpackFrom() and
+ *    scte35_splice_info_section_packTo() return -KLSCTE35_ERR_NOTSUPPORTED
+ *    for it. See src/scte35.c.
+ *
+ *  - Component splicing in splice_insert() (Sec 9.7.3, the
+ *    program_splice_flag == 0 case: per-component splice_time() loop) is
+ *    not implemented. See struct scte35_splice_insert_s below and
+ *    src/scte35.c (search "component_count").
+ *
+ *  - Encrypted messages are not supported, and packing vs. parsing handle
+ *    that asymmetrically: scte35_splice_info_section_packTo() rejects any
+ *    nonzero protocol_version, encrypted_packet or encryption_algorithm
+ *    outright, but scte35_splice_info_section_unpackFrom() does not -- it
+ *    silently parses the command/descriptor loop as if the section were
+ *    unencrypted, which for a genuinely encrypted section means
+ *    misinterpreting ciphertext as a real command. alignment_stuffing()
+ *    and E_CRC_32 (Sec 9.6, present only when encrypted_packet == 1) are
+ *    never produced or consumed either way; e_crc_32 in struct
+ *    scte35_splice_info_section_s is always 0. Callers that need to
+ *    detect an encrypted section on the parse path must check
+ *    si->encrypted_packet themselves. See src/scte35.c,
+ *    scte35_splice_info_section_packTo()/_unpackFrom().
+ *
+ *  - segmentation_descriptor() sub_segment_num/sub_segments_expected
+ *    (Sec 10.3.3, present when segmentation_type_id is a Provider/
+ *    Distributor Placement Opportunity Start, 0x34 or 0x36) are declared
+ *    in struct splice_descriptor_segmentation below but are never read or
+ *    written on the wire. See src/scte35.c,
+ *    scte35_append_segmentation()/scte35_parse_segmentation().
+ *
+ *  - segmentation_upid() (Sec 10.3.3.1) is stored and round-tripped as an
+ *    opaque byte blob for every upid_type. Type-specific structure is not
+ *    decoded: fixed-length UPID types (e.g. UMID, UUID) aren't validated
+ *    against their mandated length, and upid_type 0x0D (MID, a nested
+ *    list of sub-UPIDs) is not expanded into its component UPIDs -- the
+ *    concatenated sub-UPID bytes are exposed as-is. See
+ *    struct splice_descriptor_segmentation below.
+ *
+ *  - segmentation_event_id_compliance_indicator and
+ *    splice_event_id_compliance_indicator, added in later SCTE-35
+ *    revisions by repurposing one bit of the "reserved" field that
+ *    follows event_cancel_indicator in segmentation_descriptor() and
+ *    splice_insert(), are not recognized -- this library always treats
+ *    that entire field as reserved and discards it.
+ *
+ * ASSUMPTIONS (choices made where the spec is ambiguous, silent, or where
+ * this library deliberately narrows/deviates from recommended behavior):
+ *
+ *  - protocol_version (Sec 9.6): the spec's intent for forward
+ *    compatibility is that a decoder encountering an unknown protocol
+ *    version should ignore the section rather than treat it as an error.
+ *    This library instead hard-rejects any splice_info_section() with
+ *    protocol_version != 0 when *packing* one -- but, inconsistently,
+ *    _unpackFrom() doesn't check it at all on the parse side and will
+ *    happily attempt to decode a section with a nonzero protocol_version
+ *    as if it were 0 (see the encryption bullet above for the related
+ *    parse-side gap).
+ *
+ *  - segmentation_descriptor() delivery restriction flags (Sec 10.3.3):
+ *    when delivery_not_restricted_flag == 1, web_delivery_allowed_flag,
+ *    no_regional_blackout_flag, archive_allowed_flag and
+ *    device_restrictions are not present on the wire (just reserved
+ *    bits). This library fabricates values for them on parse
+ *    (all "allowed" / device_restrictions = 0x03 "None") so callers
+ *    always see a fully-populated struct; that's an interpretation of
+ *    "not restricted", not a value the bitstream actually carries.
+ *
+ *  - Unrecognized splice_descriptor_tag values (with or without the CUEI
+ *    identifier) are treated as opaque/private and passed through as raw
+ *    bytes via struct splice_descriptor_arbitrary, rather than rejected.
+ *    This matches the spec's intended extensibility model for
+ *    descriptors, so it's listed here as a documented assumption rather
+ *    than a gap.
+ *
+ *  - SCTE35_MAX_DESCRIPTORS (64) and the various fixed-size byte arrays
+ *    below (e.g. upid[255], private_byte[255]) are practical caps chosen
+ *    to match the maximum a single 8-bit length field can express (255)
+ *    or a generous real-world descriptor count -- they are not values
+ *    mandated by the spec, which places no fixed upper bound on
+ *    descriptor_loop_count itself.
  */
 
 #ifndef SCTE35_H
@@ -45,6 +136,10 @@ extern "C" {
 #define KLSCTE35_ERR_NOTSUPPORTED 3
 
 #define SCTE35_COMMAND_TYPE__SPLICE_NULL	0x00
+/* GAP: recognized as a valid command_type (e.g. by scte35_splice_info_section_
+   alloc()) but splice_schedule() itself (Sec 9.7.2) is not implemented --
+   scte35_splice_info_section_packTo()/_unpackFrom() both return
+   -KLSCTE35_ERR_NOTSUPPORTED for it in src/scte35.c. */
 #define SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE	0x04
 #define SCTE35_COMMAND_TYPE__SPLICE_INSERT	0x05
 #define SCTE35_COMMAND_TYPE__TIME_SIGNAL	0x06
@@ -97,9 +192,18 @@ struct splice_descriptor_segmentation
 {
 	uint32_t event_id;
 	uint8_t event_cancel_indicator;
+	/* GAP: newer SCTE-35 revisions add segmentation_event_id_compliance_indicator
+	   as one bit of the 7 reserved bits that follow event_cancel_indicator on the
+	   wire. Not represented here -- src/scte35.c reads/writes all 7 bits as pure
+	   reserved (see scte35_parse_segmentation()/scte35_append_segmentation()). */
 	uint8_t program_segmentation_flag;
 	uint8_t segmentation_duration_flag;
 	uint8_t delivery_not_restricted_flag;
+	/* ASSUMPTION: when delivery_not_restricted_flag == 1, the next 3 flags and
+	   device_restrictions are not actually present on the wire (just reserved
+	   bits per Sec 10.3.3). src/scte35.c's parser fabricates "fully allowed" /
+	   device_restrictions = 0x03 in that case so this struct is always fully
+	   populated -- that's an interpretation, not a transmitted value. */
 	uint8_t web_delivery_allowed_flag;
 	uint8_t no_regional_blackout_flag;
 	uint8_t archive_allowed_flag;
@@ -109,10 +213,22 @@ struct splice_descriptor_segmentation
 	uint64_t segmentation_duration;
 	uint8_t upid_type;
 	uint8_t upid_length;
+	/* GAP: segmentation_upid() (Sec 10.3.3.1) is stored here as an opaque byte
+	   blob regardless of upid_type. Fixed-length UPID types (e.g. upid_type
+	   0x04 UMID = 32 bytes, 0x10 UUID = 16 bytes) are not validated against
+	   their mandated length, and upid_type 0x0D (MID -- a nested list of
+	   sub-UPIDs, each with its own upid_type/upid_length/upid) is not expanded;
+	   its concatenated sub-UPID bytes are exposed here exactly as received. */
 	uint8_t upid[255];
 	uint8_t type_id;
 	uint8_t segment_num;
 	uint8_t segments_expected;
+	/* GAP: these two fields exist in the struct but src/scte35.c never reads or
+	   writes them on the wire, even when type_id is 0x34 or 0x36 (Provider/
+	   Distributor Placement Opportunity Start), the case the spec defines them
+	   for (Sec 10.3.3). They are always 0 after a parse, and packing never
+	   emits them regardless of what a caller sets here. See "FIXME: Sub
+	   segment num" in scte35_parse_segmentation()/scte35_append_segmentation(). */
 	uint8_t sub_segment_num;
 	uint8_t sub_segments_expected;
 };
@@ -178,15 +294,27 @@ struct scte35_splice_insert_s
 {
 	uint32_t splice_event_id;
 	uint8_t  splice_event_cancel_indicator;
+	/* GAP: as with segmentation_descriptor(), later SCTE-35 revisions add a
+	   splice_event_id_compliance_indicator bit to the reserved field that
+	   follows splice_event_cancel_indicator. Not represented -- treated as
+	   pure reserved on both parse and pack. */
 	uint8_t  out_of_network_indicator;
 	uint8_t  program_splice_flag;
 	uint8_t  duration_flag;
 	uint8_t  splice_immediate_flag;
 	struct   scte35_splice_time_s splice_time;
 
-	/* We don't support program_splice_flag == 0 */
-
-	/* We don't support component counts */
+	/* GAP: Sec 9.7.3 defines component splicing when program_splice_flag == 0:
+	   a component_count(8) followed by that many {component_tag(8), splice_time()}
+	   entries, letting a splice apply to specific elementary streams instead of
+	   the whole program. This library does not implement it -- when
+	   program_splice_flag == 0, scte35_splice_info_section_unpackFrom() reads
+	   and discards a single fixed 8-bit field instead of the real
+	   component_count + per-component loop, and
+	   scte35_splice_info_section_packTo() always writes that field as 0. The
+	   component_count/components[] fields below are consequently never
+	   populated by this library; program_splice_flag == 0 input round-trips
+	   incorrectly. See src/scte35.c (search "component_count"). */
 	uint8_t  component_count;
 	struct   scte35_splice_component_s components[256];
 
@@ -214,7 +342,17 @@ struct scte35_splice_info_section_s
 	uint8_t  section_syntax_indicator;
 	uint8_t  private_indicator;
 	uint16_t section_length;
+	/* ASSUMPTION: Sec 9.6 intends protocol_version as a forward-compatibility
+	   field -- a decoder seeing a value it doesn't recognize should ignore the
+	   section, not reject the stream outright. This library instead hard-fails
+	   (-KLSCTE35_ERR_INVAL) any section where protocol_version != 0, on both
+	   parse and pack. */
 	uint8_t  protocol_version;
+	/* GAP: encrypted_packet/encryption_algorithm are read/written, but a
+	   nonzero value on either is always rejected -- encrypted messages
+	   (Sec 9.6, including alignment_stuffing() and E_CRC_32) are not
+	   supported at all. See scte35_splice_info_section_packTo()/
+	   _unpackFrom() in src/scte35.c. */
 	uint8_t  encrypted_packet;
 	uint8_t  encryption_algorithm;
 	uint64_t pts_adjustment;
@@ -222,6 +360,11 @@ struct scte35_splice_info_section_s
 	uint16_t tier;
 	uint16_t splice_command_length;
 	uint8_t  splice_command_type;
+	/* GAP: no member here for splice_schedule() (Sec 9.7.2,
+	   splice_command_type 0x04) -- it isn't implemented, see
+	   SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE below. bandwidth_reservation()
+	   correctly has no member since Sec 9.7.5 defines it as an empty
+	   structure. */
 	union {
 		struct scte35_splice_null_s splice_null;
 		struct scte35_splice_insert_s splice_insert;
@@ -236,6 +379,8 @@ struct scte35_splice_info_section_s
 	uint16_t descriptor_loop_length;
 	uint8_t  *splice_descriptor;
 
+	/* GAP: always 0. E_CRC_32 (Sec 9.6) only exists in encrypted sections,
+	   which this library doesn't support -- see encrypted_packet above. */
 	uint32_t e_crc_32;
 	uint32_t crc_32;
 	uint32_t crc_32_is_valid;
