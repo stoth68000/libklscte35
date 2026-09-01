@@ -27,6 +27,7 @@ SRC += scte104to35.c
 endif
 SRC += json.c
 SRC += base64.c
+SRC += test_api.c
 
 bin_PROGRAMS  = klscte35_util
 bin_PROGRAMS += klscte35_parse
@@ -36,6 +37,7 @@ bin_PROGRAMS += klscte35_scte104to35
 endif
 bin_PROGRAMS += klscte35_tojson
 bin_PROGRAMS += klscte35_tobase64
+bin_PROGRAMS += klscte35_test_api
 
 klscte35_util_SOURCES = $(SRC)
 klscte35_parse_SOURCES = $(SRC)
@@ -45,3 +47,4 @@ klscte35_scte104to35_SOURCES = $(SRC)
 endif
 klscte35_tojson_SOURCES = $(SRC)
 klscte35_tobase64_SOURCES = $(SRC)
+klscte35_test_api_SOURCES = $(SRC)
