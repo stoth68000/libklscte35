@@ -11,6 +11,7 @@ config.log
 config.status
 config.sub
 configure
+configure~
 depcomp
 install-sh
 libtool
@@ -20,4 +21,5 @@ missing
 libklscte35.la
 src/libklscte35.la
 src/libklscte35_la-*.lo
+src/libklscte35.pc
 doxygen/html

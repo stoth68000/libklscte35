@@ -39,9 +39,14 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <libklscte35/scte35.h>
 #include "base64.h"
 #include "crc32.h"
+#include "klbitstream_readwriter.h"
 #include "scte35_samples.h"
 
 #ifdef HAVE_LIBKLVANC
@@ -61,6 +66,56 @@ static int g_fail = 0;
 } while (0)
 
 #define SECTION(name) printf("\n=== %s ===\n", name)
+
+/* ------------------------------------------------------------------- */
+/* Process-isolated regression harness for confirmed memory-safety      */
+/* bugs. Each of these tests deliberately feeds the library an input    */
+/* that is known (pre-fix) to corrupt memory or crash the process. Run  */
+/* the actual dangerous call in a forked child so that if it *does*     */
+/* crash, only that one test is reported as a failure instead of        */
+/* taking the entire suite down with it. The child performs its own     */
+/* correctness checks and reports the outcome purely via its exit code: */
+/*   exit(0)      -- ran safely and behaved correctly                   */
+/*   exit(1..125) -- ran safely but behaved incorrectly                 */
+/*   killed by a signal (SIGSEGV/SIGABRT/etc.) -- crashed                */
+/* CHECK()s that run inside the child update the child's own copy of    */
+/* g_pass/g_fail, which is discarded when the child exits; only the     */
+/* pass/fail of the isolated test itself is counted in the parent.      */
+/* ------------------------------------------------------------------- */
+static void run_isolated(const char *name, void (*fn)(void))
+{
+	fflush(stdout);
+	fflush(stderr);
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		g_fail++;
+		printf("  [FAIL] %s: fork() failed\n", name);
+		return;
+	}
+
+	if (pid == 0) {
+		/* Child: run the dangerous call. fn() must terminate via _exit(). */
+		fn();
+		_exit(125); /* fn() should never fall through to here */
+	}
+
+	int status = 0;
+	waitpid(pid, &status, 0);
+
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+		g_pass++;
+		printf("  [PASS] %s\n", name);
+	} else if (WIFSIGNALED(status)) {
+		g_fail++;
+		printf("  [FAIL] %s: subprocess was killed by signal %d (%s)\n",
+		       name, WTERMSIG(status), strsignal(WTERMSIG(status)));
+	} else {
+		g_fail++;
+		printf("  [FAIL] %s: subprocess exited with status %d\n",
+		       name, WEXITSTATUS(status));
+	}
+}
 
 /* ------------------------------------------------------------------- */
 /* scte35_description_command_type()                                   */
@@ -383,15 +438,6 @@ static void test_base64(void)
 
 	SECTION("scte35_create_base64_message()");
 	{
-		/* NOTE: kept deliberately small. The internal staging buffer used by
-		   scte35_create_base64_message() is a fixed 256-byte stack buffer
-		   (src/scte35-tobase64.c), while scte35_splice_info_section_packTo()
-		   has no enforced upper bound on how much it writes -- a section with
-		   several descriptors (e.g. the 4-descriptor section built in
-		   test_descriptor_roundtrip()) can exceed 256 bytes and overflow that
-		   stack buffer. This is a confirmed finding from this session's code
-		   review; only exercise this API here with inputs known to stay well
-		   under 256 bytes until it's fixed. */
 		struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
 		CHECK(si != NULL, "alloc SPLICE_NULL for base64 test");
 		if (si) {
@@ -406,6 +452,60 @@ static void test_base64(void)
 				int packed_len = scte35_splice_info_section_packTo(si, packed, sizeof(packed));
 				CHECK(packed_len > 0, "reference pack for comparison succeeds");
 
+				size_t dec_len = 0;
+				uint8_t *dec = klscte35_base64_decode((uint8_t *)b64, strlen(b64), &dec_len);
+				CHECK(dec != NULL, "decoding scte35_create_base64_message's output succeeds");
+				CHECK(dec && packed_len > 0 && dec_len == (size_t)packed_len &&
+				      memcmp(dec, packed, dec_len) == 0,
+				      "base64 message decodes back to the packed section bytes");
+				free(dec);
+				free(b64);
+			}
+			scte35_splice_info_section_free(si);
+		}
+	}
+
+	SECTION("scte35_create_base64_message() with a section > 256 bytes");
+	{
+		/* scte35_create_base64_message()'s internal staging buffer used to be
+		   a fixed 256-byte stack buffer (src/scte35-tobase64.c) while
+		   scte35_splice_info_section_packTo() has no enforced upper bound on
+		   how much it writes -- a section with a full-size segmentation
+		   descriptor overflowed it. Now fixed (see CRITICAL#2 in
+		   test_critical_regressions()); exercise it here directly too, in
+		   the normal (non-isolated) suite, as an ongoing regression check. */
+		struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+		CHECK(si != NULL, "alloc TIME_SIGNAL for large base64 test");
+		if (si) {
+			si->time_signal.time_specified_flag = 1;
+			si->time_signal.pts_time = 900000;
+
+			struct splice_descriptor *sd;
+			int ret = alloc_SCTE_35_splice_descriptor(SCTE35_SEGMENTATION_DESCRIPTOR, &sd);
+			CHECK(ret == 0 && sd != NULL, "alloc_SCTE_35_splice_descriptor(SEGMENTATION)");
+			if (ret == 0) {
+				sd->identifier = 0x43554549;
+				sd->seg_data.event_id = 1;
+				sd->seg_data.program_segmentation_flag = 1;
+				sd->seg_data.delivery_not_restricted_flag = 1;
+				sd->seg_data.upid_type = 0x0c;
+				sd->seg_data.upid_length = 255;
+				memset(sd->seg_data.upid, 'A', 255);
+				sd->seg_data.type_id = 0x22;
+				si->descriptors[si->descriptor_loop_count++] = sd;
+			}
+
+			uint8_t packed[4096];
+			int packed_len = scte35_splice_info_section_packTo(si, packed, sizeof(packed));
+			CHECK(packed_len > 256, "reference pack exceeds 256 bytes (packed_len=%d)", packed_len);
+
+			char *b64 = NULL;
+			uint32_t b64_len = 0;
+			ret = scte35_create_base64_message(si, &b64, &b64_len);
+			CHECK(ret == 0, "scte35_create_base64_message succeeds on a section > 256 bytes");
+			CHECK(b64 != NULL && b64_len > 0, "base64 buffer populated");
+
+			if (b64) {
 				size_t dec_len = 0;
 				uint8_t *dec = klscte35_base64_decode((uint8_t *)b64, strlen(b64), &dec_len);
 				CHECK(dec != NULL, "decoding scte35_create_base64_message's output succeeds");
@@ -454,6 +554,82 @@ static void test_json(void)
 	}
 
 	scte35_splice_info_section_free(si);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #10: scte35_create_json_message() (src/scte35-tojson.c)     */
+/* leaked the in-progress json_object tree ("jobj") when the command    */
+/* type wasn't one of the ones it knows how to serialize. SPLICE_      */
+/* SCHEDULE is a valid scte35_splice_info_section_alloc() command type  */
+/* but has no case in the JSON switch, so it falls into that path.      */
+/* There's no portable way to assert "did not leak" from inside the     */
+/* test itself; run the suite under a leak checker to confirm (the      */
+/* fix itself is a one-line json_object_put() before the early return). */
+/* ------------------------------------------------------------------- */
+static void test_json_unsupported_command_type_leak(void)
+{
+	SECTION("scte35_create_json_message() unsupported command type (leak check)");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE);
+	CHECK(si != NULL, "alloc SPLICE_SCHEDULE (unsupported by JSON conversion)");
+	if (!si)
+		return;
+
+	char *buf = NULL;
+	uint16_t byteCount = 0;
+	int ret = scte35_create_json_message(si, &buf, &byteCount, 1);
+
+	if (ret == -KLSCTE35_ERR_NOTSUPPORTED) {
+		printf("  [SKIP] json-c not compiled in; scte35_create_json_message() correctly reports NOTSUPPORTED\n");
+		g_pass++;
+	} else {
+		CHECK(ret == -1, "returns -1 for an unsupported command type");
+		CHECK(buf == NULL, "does not populate the output buffer on failure");
+	}
+
+	if (buf)
+		free(buf);
+	scte35_splice_info_section_free(si);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #12: scte35_create_json_message() didn't check strdup()'s   */
+/* result before strlen()'ing it, which would NULL-deref-crash on an    */
+/* allocation failure. Genuinely forcing malloc/strdup to fail isn't    */
+/* portable without allocator interposition, so this is a best-effort   */
+/* attempt: cap the child's address space very low with setrlimit()     */
+/* before calling in. Whether or not that actually starves the          */
+/* allocator on a given platform, the one property that must always     */
+/* hold -- and is what the fix guarantees -- is that the call never     */
+/* crashes and its return code and output pointer are consistent.       */
+/* ------------------------------------------------------------------- */
+static void child_moderate12_json_oom(void)
+{
+	struct rlimit rl = { 8 * 1024 * 1024, 8 * 1024 * 1024 }; /* 8MB address space */
+	setrlimit(RLIMIT_AS, &rl);
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		_exit(0); /* alloc itself failed under the limit -- not a crash, still fine */
+
+	si->time_signal.time_specified_flag = 1;
+	si->time_signal.pts_time = 900000;
+
+	char *buf = NULL;
+	uint16_t byteCount = 0;
+	int ret = scte35_create_json_message(si, &buf, &byteCount, 1);
+
+	/* Whatever happened, it must be internally consistent: success implies
+	   a real buffer, failure implies no buffer -- never a NULL buffer
+	   reported as success (which is exactly what used to crash on the
+	   following strlen()). */
+	int ok = (ret == 0) ? (buf != NULL) : (buf == NULL);
+
+	if (buf)
+		free(buf);
+	scte35_splice_info_section_free(si);
+
+	_exit(ok ? 0 : 4);
 }
 
 /* ------------------------------------------------------------------- */
@@ -515,13 +691,19 @@ static void test_negative_inputs(void)
 		      "unpackFrom rejects a NULL destination struct");
 	}
 
-	/* NOTE: scte35_splice_info_section_parse(NULL, 0) / (ptr, 0) are intentionally
-	   NOT exercised here. Code review finding: scte35_splice_info_section_parse()
-	   (src/scte35.c) dereferences its "section" argument to check the table_id
-	   *before* validating it's non-NULL, even though scte35_splice_info_section_
-	   unpackFrom() -- which it calls internally -- has the correct guard. Calling
-	   the wrapper with a NULL/zero-length buffer currently crashes the process.
-	   Add a test here once that's fixed. */
+	/* scte35_splice_info_section_parse() now guards NULL/zero-length input
+	   itself before dereferencing "section" (previously it crashed -- see
+	   CRITICAL#5 in test_critical_regressions() for the process-isolated
+	   regression test that caught it). Safe to call directly here now. */
+	{
+		uint8_t one_byte[1] = { SCTE35_TABLE_ID };
+		CHECK(scte35_splice_info_section_parse(NULL, 0) == NULL,
+		      "parse() rejects a NULL section pointer");
+		CHECK(scte35_splice_info_section_parse(NULL, 16) == NULL,
+		      "parse() rejects a NULL section pointer with a nonzero byteCount");
+		CHECK(scte35_splice_info_section_parse(one_byte, 0) == NULL,
+		      "parse() rejects a zero-length section");
+	}
 
 	/* packTo() argument validation */
 	{
@@ -540,6 +722,302 @@ static void test_negative_inputs(void)
 		CHECK(scte35_splice_info_section_packTo(NULL, buf, sizeof(buf)) == -KLSCTE35_ERR_INVAL,
 		      "packTo rejects a NULL section pointer");
 	}
+}
+
+/* ------------------------------------------------------------------- */
+/* CRITICAL #1: scte35_parse_descriptors() (src/scte35.c) writes into   */
+/* si->descriptors[] with no bound check against SCTE35_MAX_DESCRIPTORS */
+/* (64). A wire section with many small descriptors drives              */
+/* descriptor_loop_count arbitrarily far past the end of that fixed-    */
+/* size array, corrupting adjacent struct fields (including the         */
+/* splice_descriptor heap pointer) and beyond.                          */
+/* ------------------------------------------------------------------- */
+extern ssize_t scte35_parse_descriptors(struct scte35_splice_info_section_s *si, uint8_t *desc, uint32_t descLengthBytes);
+
+static void child_critical1_parse_descriptors_overflow(void)
+{
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
+	if (!si)
+		_exit(2);
+
+	/* 1000 minimal 6-byte descriptors: tag(1) + length=4(1) + 4 arbitrary
+	   "identifier" bytes. A non-CUEI identifier with an unrecognized tag
+	   takes the generic "unknown descriptor" fallback in
+	   scte35_parse_descriptors(), which always succeeds and appends to
+	   si->descriptors[] -- 1000 is far beyond SCTE35_MAX_DESCRIPTORS (64). */
+	enum { N = 1000 };
+	uint8_t *buf = malloc(N * 6);
+	if (!buf)
+		_exit(3);
+	for (int i = 0; i < N; i++) {
+		uint8_t *d = buf + (i * 6);
+		d[0] = 0xEE;
+		d[1] = 0x04;
+		d[2] = 'T'; d[3] = 'E'; d[4] = 'S'; d[5] = 'T';
+	}
+
+	scte35_parse_descriptors(si, buf, N * 6);
+
+	if (si->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS) {
+		fprintf(stderr, "descriptor_loop_count=%d exceeds SCTE35_MAX_DESCRIPTORS=%d\n",
+			si->descriptor_loop_count, SCTE35_MAX_DESCRIPTORS);
+		_exit(4);
+	}
+
+	free(buf);
+	scte35_splice_info_section_free(si);
+	_exit(0);
+}
+
+/* ------------------------------------------------------------------- */
+/* CRITICAL #2: scte35_create_base64_message() (src/scte35-tobase64.c)  */
+/* stages the packed section in a fixed 256-byte stack buffer, while    */
+/* scte35_splice_info_section_packTo() has no enforced upper bound on   */
+/* how much it writes. A section with one full-size segmentation        */
+/* descriptor (255-byte UPID) packs to well over 256 bytes.             */
+/* ------------------------------------------------------------------- */
+static void child_critical2_base64_stack_overflow(void)
+{
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		_exit(2);
+
+	si->time_signal.time_specified_flag = 1;
+	si->time_signal.pts_time = 900000;
+
+	struct splice_descriptor *sd;
+	if (alloc_SCTE_35_splice_descriptor(SCTE35_SEGMENTATION_DESCRIPTOR, &sd) != 0)
+		_exit(3);
+	sd->identifier = 0x43554549;
+	sd->seg_data.event_id = 1;
+	sd->seg_data.program_segmentation_flag = 1;
+	sd->seg_data.delivery_not_restricted_flag = 1;
+	sd->seg_data.upid_type = 0x0c;
+	sd->seg_data.upid_length = 255;
+	memset(sd->seg_data.upid, 'A', 255);
+	sd->seg_data.type_id = 0x22;
+	si->descriptors[si->descriptor_loop_count++] = sd;
+
+	/* Confirm this test is actually exercising the overflow (i.e. the
+	   packed section really does exceed the old 256-byte staging buffer)
+	   and not silently passing as a no-op. */
+	uint8_t verify[4096];
+	int packed_len = scte35_splice_info_section_packTo(si, verify, sizeof(verify));
+	if (packed_len <= 256) {
+		fprintf(stderr, "test setup error: packed_len=%d does not exceed 256\n", packed_len);
+		_exit(5);
+	}
+
+	char *b64 = NULL;
+	uint32_t b64_len = 0;
+	int ret = scte35_create_base64_message(si, &b64, &b64_len);
+	if (ret != 0 || !b64) {
+		fprintf(stderr, "scte35_create_base64_message failed (ret=%d)\n", ret);
+		_exit(6);
+	}
+
+	size_t dec_len = 0;
+	uint8_t *dec = klscte35_base64_decode((uint8_t *)b64, strlen(b64), &dec_len);
+	if (!dec || (int)dec_len != packed_len || memcmp(dec, verify, dec_len) != 0) {
+		fprintf(stderr, "base64 message does not decode back to the packed section bytes\n");
+		_exit(7);
+	}
+
+	free(dec);
+	free(b64);
+	scte35_splice_info_section_free(si);
+	_exit(0);
+}
+
+/* ------------------------------------------------------------------- */
+/* CRITICAL #4: klbs_read_bit()/klbs_write_bit() (src/klbitstream_      */
+/* readwriter.h) only guard the buffer with assert(), which is a        */
+/* no-op under -DNDEBUG and, even when active, still permits one        */
+/* out-of-bounds byte access before the *next* call aborts. Reading     */
+/* far more bits than a buffer holds must never dereference past its    */
+/* end, regardless of build flags.                                      */
+/* ------------------------------------------------------------------- */
+static void child_critical4_bitstream_overread(void)
+{
+	uint8_t *tiny = malloc(4);
+	if (!tiny)
+		_exit(2);
+	memset(tiny, 0xAA, 4);
+
+	struct klbs_context_s *bs = klbs_alloc();
+	if (!bs)
+		_exit(3);
+	klbs_read_set_buffer(bs, tiny, 4);
+
+	/* Deliberately read far more bits than the 4-byte buffer holds. */
+	for (int i = 0; i < 100000; i++)
+		klbs_read_bits(bs, 8);
+
+	int overflowed = klbs_has_overflowed(bs);
+
+	klbs_free(bs);
+	free(tiny);
+
+	if (!overflowed) {
+		fprintf(stderr, "bitstream reader did not flag overflow after reading past the buffer\n");
+		_exit(4);
+	}
+	_exit(0);
+}
+
+/* ------------------------------------------------------------------- */
+/* CRITICAL #5: scte35_splice_info_section_parse() (src/scte35.c)       */
+/* dereferences its "section" argument to check the table_id *before*   */
+/* validating it's non-NULL, even though scte35_splice_info_section_    */
+/* unpackFrom() -- which it calls internally -- has the correct guard.  */
+/* ------------------------------------------------------------------- */
+static void child_critical5_parse_null(void)
+{
+	struct scte35_splice_info_section_s *s = scte35_splice_info_section_parse(NULL, 0);
+	if (s != NULL) {
+		fprintf(stderr, "parse(NULL, 0) unexpectedly returned non-NULL\n");
+		scte35_splice_info_section_free(s);
+		_exit(2);
+	}
+	_exit(0);
+}
+
+static void test_critical_regressions(void)
+{
+	SECTION("Critical issue regressions (process-isolated)");
+
+	run_isolated("CRITICAL#1 scte35_parse_descriptors() bounds check", child_critical1_parse_descriptors_overflow);
+	run_isolated("CRITICAL#2 scte35_create_base64_message() stack buffer", child_critical2_base64_stack_overflow);
+	run_isolated("CRITICAL#4 klbs_read_bit() overread guard", child_critical4_bitstream_overread);
+	run_isolated("CRITICAL#5 scte35_splice_info_section_parse() NULL guard", child_critical5_parse_null);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #6: descriptor_length/splice_command_length underflow.      */
+/* scte35_parse_descriptors() and the PRIVATE command branch of         */
+/* scte35_splice_info_section_unpackFrom() both computed a length by    */
+/* subtracting 4 from an attacker-controlled wire field without first   */
+/* checking it was >= 4, letting the subtraction wrap around. The       */
+/* out-of-bounds *read* this used to enable is now safely refused by    */
+/* the CRITICAL#4 fix, but the malformed input should be rejected       */
+/* outright rather than silently "succeeding" with a garbage length.    */
+/* ------------------------------------------------------------------- */
+static void test_parse_descriptors_length_validation(void)
+{
+	SECTION("scte35_parse_descriptors() descriptor_length validation");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_NULL);
+	CHECK(si != NULL, "alloc SPLICE_NULL for descriptor length test");
+	if (!si)
+		return;
+
+	/* tag=0xEE, descriptor_length=2 (invalid -- must be >= 4 to cover the
+	   mandatory 32-bit "identifier" field that follows it). */
+	uint8_t buf[6] = { 0xEE, 0x02, 'A', 'B', 'C', 'D' };
+
+	ssize_t ret = scte35_parse_descriptors(si, buf, sizeof(buf));
+	CHECK(ret == 0, "scte35_parse_descriptors returns cleanly");
+	CHECK(si->descriptor_loop_count == 0,
+	      "malformed descriptor (length < 4) is rejected, not appended (count=%d)",
+	      si->descriptor_loop_count);
+
+	scte35_splice_info_section_free(si);
+}
+
+static void test_private_command_length_validation(void)
+{
+	SECTION("PRIVATE command splice_command_length validation");
+
+	/* Hand-build just enough of a splice_info_section header to reach the
+	   PRIVATE command branch, with splice_command_length deliberately set
+	   below the 4 bytes needed for the mandatory "identifier" field. We
+	   don't need a valid CRC or descriptor loop -- unpackFrom() must
+	   reject this before it ever reads that far. */
+	uint8_t raw[16];
+	memset(raw, 0, sizeof(raw));
+
+	struct klbs_context_s *bs = klbs_alloc();
+	CHECK(bs != NULL, "klbs_alloc succeeds");
+	if (!bs)
+		return;
+
+	klbs_write_set_buffer(bs, raw, sizeof(raw));
+	klbs_write_bits(bs, SCTE35_TABLE_ID, 8);
+	klbs_write_bits(bs, 0, 1);              /* section_syntax_indicator */
+	klbs_write_bits(bs, 0, 1);              /* private_indicator */
+	klbs_write_bits(bs, 0x3, 2);            /* reserved */
+	klbs_write_bits(bs, 0, 12);             /* section_length (unchecked by unpackFrom) */
+	klbs_write_bits(bs, 0, 8);              /* protocol_version */
+	klbs_write_bits(bs, 0, 1);              /* encrypted_packet */
+	klbs_write_bits(bs, 0, 6);              /* encryption_algorithm */
+	klbs_write_bits(bs, 0, 33);             /* pts_adjustment */
+	klbs_write_bits(bs, 0, 8);              /* cw_index */
+	klbs_write_bits(bs, 0xFFF, 12);         /* tier */
+	klbs_write_bits(bs, 2, 12);             /* splice_command_length -- deliberately < 4 */
+	klbs_write_bits(bs, SCTE35_COMMAND_TYPE__PRIVATE, 8); /* splice_command_type */
+	klbs_write_buffer_complete(bs);
+
+	int len = klbs_get_byte_count(bs);
+	klbs_free(bs);
+
+	struct scte35_splice_info_section_s si;
+	memset(&si, 0, sizeof(si));
+	ssize_t ret = scte35_splice_info_section_unpackFrom(&si, raw, len);
+	CHECK(ret == -KLSCTE35_ERR_INVAL,
+	      "unpackFrom rejects a PRIVATE command with splice_command_length < 4 (ret=%zd)", ret);
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #8/#11: scte35_append_dtmf() (src/scte35.c) trusted          */
+/* dtmf_count -- a plain public uint8_t field, 0-255 -- as a loop bound  */
+/* over both dtmf_char[8] and the descriptor's fixed 256-byte staging   */
+/* buffer when serializing. dtmf_count=255 overflows that stack buffer. */
+/* ------------------------------------------------------------------- */
+static void child_moderate8_dtmf_serialize_overflow(void)
+{
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__TIME_SIGNAL);
+	if (!si)
+		_exit(2);
+	si->time_signal.time_specified_flag = 1;
+	si->time_signal.pts_time = 900000;
+
+	struct splice_descriptor *sd;
+	if (alloc_SCTE_35_splice_descriptor(SCTE35_DTMF_DESCRIPTOR, &sd) != 0)
+		_exit(3);
+	sd->identifier = 0x43554549;
+	sd->dtmf_data.preroll = 1;
+	sd->dtmf_data.dtmf_count = 255; /* out-of-spec (wire field is 3 bits, max 7),
+					    but nothing stops a caller from setting it */
+	memset(sd->dtmf_data.dtmf_char, 'X', sizeof(sd->dtmf_data.dtmf_char));
+	si->descriptors[si->descriptor_loop_count++] = sd;
+
+	uint8_t out[4096];
+	int len = scte35_splice_info_section_packTo(si, out, sizeof(out));
+	if (len <= 0)
+		_exit(4);
+
+	struct scte35_splice_info_section_s *rt = scte35_splice_info_section_parse(out, len);
+	if (!rt)
+		_exit(5);
+
+	int ok = (rt->descriptor_loop_count == 1) &&
+		 (rt->descriptors[0]->dtmf_data.dtmf_count <= sizeof(sd->dtmf_data.dtmf_char));
+
+	scte35_splice_info_section_free(rt);
+	scte35_splice_info_section_free(si);
+
+	if (!ok)
+		_exit(6);
+	_exit(0);
+}
+
+static void test_moderate_regressions(void)
+{
+	SECTION("Moderate issue regressions");
+
+	test_parse_descriptors_length_validation();
+	test_private_command_length_validation();
+	run_isolated("MODERATE#8 scte35_append_dtmf() stack buffer", child_moderate8_dtmf_serialize_overflow);
 }
 
 #ifdef HAVE_LIBKLVANC
@@ -603,6 +1081,33 @@ static int scte104_rt_cb(void *callback_context, struct klvanc_context_s *ctx,
 	}
 
 	return 0;
+}
+
+/* ------------------------------------------------------------------- */
+/* MODERATE #9: scte35_create_scte104_message() (src/scte35-to104.c)    */
+/* leaked its klvanc context/packet on two error paths -- an           */
+/* unsupported command type, and (untestable without fault injection)  */
+/* klvanc_alloc_SCTE_104() failure. This exercises the reachable one:   */
+/* SPLICE_SCHEDULE is a valid alloc()-able command type but has no      */
+/* SCTE-104 equivalent, so it falls into the "unsupported" branch.      */
+/* There's no portable way to assert "did not leak" from within the     */
+/* test itself; run the suite under a leak checker (e.g. `leaks` on     */
+/* macOS, or valgrind) to confirm.                                      */
+/* ------------------------------------------------------------------- */
+static void test_scte104_unsupported_command_type(void)
+{
+	SECTION("scte35_create_scte104_message() unsupported command type (leak check)");
+
+	struct scte35_splice_info_section_s *si = scte35_splice_info_section_alloc(SCTE35_COMMAND_TYPE__SPLICE_SCHEDULE);
+	CHECK(si != NULL, "alloc SPLICE_SCHEDULE (unsupported by SCTE-104 conversion)");
+	if (si) {
+		uint8_t *buf = NULL;
+		uint16_t byteCount = 0;
+		int ret = scte35_create_scte104_message(si, &buf, &byteCount, TEST_PTS_TIME);
+		CHECK(ret == -1, "returns -1 for an unsupported command type");
+		CHECK(buf == NULL, "does not populate the output buffer on failure");
+		scte35_splice_info_section_free(si);
+	}
 }
 
 static void test_scte104_from_vanc(void)
@@ -758,6 +1263,62 @@ static void test_scte104_to_scte35_closed_loop(void)
 
 	scte35_splice_info_section_free(si);
 }
+
+/* ------------------------------------------------------------------- */
+/* CRITICAL #3: scte35_append_104_descriptor()/_time() (src/scte35-    */
+/* from104.c) have no bound check at all before writing into            */
+/* si->descriptors[], and scte35_append_104_dtmf()/_avail()/            */
+/* _segmentation() have an off-by-one (">" instead of ">="). A single    */
+/* Multiple Operation Message can carry up to 255 operations (num_ops   */
+/* is an unsigned char), so a splice followed by many descriptor-insert */
+/* operations drives descriptor_loop_count past SCTE35_MAX_DESCRIPTORS. */
+/* ------------------------------------------------------------------- */
+static void child_critical3_from104_descriptor_overflow(void)
+{
+	struct klvanc_packet_scte_104_s *pkt = NULL;
+	if (klvanc_alloc_SCTE_104(0xffff, &pkt) != 0)
+		_exit(2);
+
+	struct klvanc_multiple_operation_message_operation *op = NULL;
+	if (klvanc_SCTE_104_Add_MOM_Op(pkt, MO_SPLICE_NULL_REQUEST_DATA, &op) != 0)
+		_exit(3);
+
+	/* 200 time-descriptor insert operations targeting the splice above --
+	   well beyond SCTE35_MAX_DESCRIPTORS (64), and well within the 255-op
+	   ceiling a single MOM can carry. */
+	enum { N = 200 };
+	for (int i = 0; i < N; i++) {
+		if (klvanc_SCTE_104_Add_MOM_Op(pkt, MO_INSERT_TIME_DESCRIPTOR, &op) != 0)
+			_exit(4);
+		op->time_data.TAI_seconds = (uint64_t)i;
+		op->time_data.TAI_ns = 0;
+		op->time_data.UTC_offset = 0;
+	}
+
+	struct splice_entries results;
+	memset(&results, 0, sizeof(results));
+	int ret = scte35_generate_from_scte104(pkt, &results, 1000000ULL);
+
+	int overflowed = 0;
+	for (int i = 0; i < (int)results.num_splices; i++) {
+		struct scte35_splice_info_section_s *s =
+			scte35_splice_info_section_parse(results.splice_entry[i], results.splice_size[i]);
+		if (s) {
+			if (s->descriptor_loop_count > SCTE35_MAX_DESCRIPTORS)
+				overflowed = 1;
+			scte35_splice_info_section_free(s);
+		}
+		free(results.splice_entry[i]);
+	}
+
+	klvanc_free_SCTE_104(pkt);
+
+	if (ret != 0 || overflowed) {
+		fprintf(stderr, "from104 descriptor overflow check failed (ret=%d overflowed=%d)\n", ret, overflowed);
+		_exit(5);
+	}
+	_exit(0);
+}
 #endif /* HAVE_LIBKLVANC */
 
 int test_api_main(int argc, char *argv[])
@@ -771,11 +1332,17 @@ int test_api_main(int argc, char *argv[])
 	test_descriptor_roundtrip();
 	test_base64();
 	test_json();
+	test_json_unsupported_command_type_leak();
+	run_isolated("MODERATE#12 scte35_create_json_message() OOM handling", child_moderate12_json_oom);
 	test_crc32();
 	test_negative_inputs();
+	test_critical_regressions();
+	test_moderate_regressions();
 #ifdef HAVE_LIBKLVANC
 	test_scte104_from_vanc();
 	test_scte104_to_scte35_closed_loop();
+	run_isolated("CRITICAL#3 scte35_generate_from_scte104() descriptor bounds", child_critical3_from104_descriptor_overflow);
+	test_scte104_unsupported_command_type();
 #else
 	printf("\n=== SCTE-104 conversion tests ===\n");
 	printf("  [SKIP] built without libklvanc support\n");

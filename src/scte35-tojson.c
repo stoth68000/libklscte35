@@ -210,7 +210,12 @@ static int json_append_dtmf(struct splice_descriptor *sd, json_object *obj)
 	json_object_object_add(desc, "dtmf_count",
 			       json_object_new_int64(sd->dtmf_data.dtmf_count));
 
-	for (int i = 0; i < sd->dtmf_data.dtmf_count; i++) {
+	int dtmf_n = sd->dtmf_data.dtmf_count;
+	if (dtmf_n > (int)sizeof(sd->dtmf_data.dtmf_char))
+		dtmf_n = (int)sizeof(sd->dtmf_data.dtmf_char);
+	if (dtmf_n > (int)sizeof(buf) - 1)
+		dtmf_n = (int)sizeof(buf) - 1;
+	for (int i = 0; i < dtmf_n; i++) {
 		buf[i] = sd->dtmf_data.dtmf_char[i];
 	}
 	json_object_object_add(desc, "DTMF_char", json_object_new_string(buf));
@@ -339,6 +344,7 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
 			s->splice_command_type);
+		json_object_put(jobj);
 		return -1;
 	}
 
@@ -346,24 +352,31 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 		json_object *desc_array = json_object_new_array();
 		for (int i = 0; i < s->descriptor_loop_count; i++) {
 			struct splice_descriptor *sd = s->descriptors[i];
+			int dret;
+
 			switch(sd->splice_descriptor_tag) {
 			case SCTE35_AVAIL_DESCRIPTOR:
-				json_append_avail(sd, desc_array);
+				dret = json_append_avail(sd, desc_array);
 				break;
 			case SCTE35_DTMF_DESCRIPTOR:
-				json_append_dtmf(sd, desc_array);
+				dret = json_append_dtmf(sd, desc_array);
 				break;
 			case SCTE35_SEGMENTATION_DESCRIPTOR:
-				json_append_segmentation(sd, desc_array);
+				dret = json_append_segmentation(sd, desc_array);
 				break;
 			case SCTE35_TIME_DESCRIPTOR:
-				json_append_time(sd, desc_array);
+				dret = json_append_time(sd, desc_array);
 				break;
 			default:
 				/* Any SCTE-35 descriptor we don't recognize should be pushed
 				   out as a "Private Splice Descriptor" */
-				json_append_private_splice(sd, desc_array);
+				dret = json_append_private_splice(sd, desc_array);
 				break;
+			}
+
+			if (dret != 0) {
+				fprintf(stderr, "%s: Failed to append descriptor 0x%x to JSON\n",
+					__func__, sd->splice_descriptor_tag);
 			}
 		}
 		json_object_object_add(jobj, "descriptors", desc_array);
@@ -373,6 +386,10 @@ int scte35_create_json_message(struct scte35_splice_info_section_s *s, char **bu
 		*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PLAIN));
 	} else {
 		*buf = strdup(json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+	}
+	if (*buf == NULL) {
+		json_object_put(jobj);
+		return -KLSCTE35_ERR_NOMEM;
 	}
 	*byteCount=strlen(*buf);
 	json_object_put(jobj);

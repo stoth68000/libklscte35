@@ -268,8 +268,10 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 
 	/* Create a Multiple Operation Message SCTE-104 packet */
 	ret = klvanc_alloc_SCTE_104(0xffff, &pkt);
-	if (ret != 0)
+	if (ret != 0) {
+		klvanc_context_destroy(ctx);
 		return ret;
+	}
 
 	/* Compensate for any adjustments intermediate processors may have
 	   made to the PTS before using the value in any calculations */
@@ -298,6 +300,8 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	default:
 		fprintf(stderr, "%s: Unsupported command type %d\n", __func__,
 			s->splice_command_type);
+		klvanc_free_SCTE_104(pkt);
+		klvanc_context_destroy(ctx);
 		return -1;
 	}
 
@@ -305,31 +309,38 @@ int scte35_create_scte104_message(struct scte35_splice_info_section_s *s, uint8_
 	   based on the tier value in the splice_info section, as opposed to the presence of a
 	   splice descriptor. */
 	if (s->tier != 0x0fff) {
-		scte35_append_tier(s, pkt);
+		if (scte35_append_tier(s, pkt) != 0)
+			fprintf(stderr, "%s: Failed to append tier operation\n", __func__);
 	}
 
 	for (int i = 0; i < s->descriptor_loop_count; i++) {
 		struct splice_descriptor *sd = s->descriptors[i];
+		int dret;
+
 		switch(sd->splice_descriptor_tag) {
 		case SCTE35_AVAIL_DESCRIPTOR:
-			scte35_append_avail(sd, pkt);
+			dret = scte35_append_avail(sd, pkt);
 			break;
 		case SCTE35_DTMF_DESCRIPTOR:
-			scte35_append_dtmf(sd, pkt);
+			dret = scte35_append_dtmf(sd, pkt);
 			break;
 		case SCTE35_SEGMENTATION_DESCRIPTOR:
-			scte35_append_segmentation(sd, pkt);
+			dret = scte35_append_segmentation(sd, pkt);
 			break;
 		case SCTE35_TIME_DESCRIPTOR:
-			scte35_append_time(sd, pkt);
+			dret = scte35_append_time(sd, pkt);
 			break;
 		default:
 			/* Any SCTE-35 descriptor we don't recognize should be pushed
 			   out over SCTE-104 using insert_descriptor_request */
-			scte35_append_descriptor(sd, pkt);
+			dret = scte35_append_descriptor(sd, pkt);
 			break;
 		}
 
+		if (dret != 0) {
+			fprintf(stderr, "%s: Failed to append descriptor 0x%x\n", __func__,
+				sd->splice_descriptor_tag);
+		}
 	}
 
 	/* Serialize the Multiple Operation Message out to a VANC array */

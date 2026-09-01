@@ -25,7 +25,7 @@
 int scte35_create_base64_message(struct scte35_splice_info_section_s *s, char **buf, uint32_t *byteCount)
 {
 	int ret;
-	uint8_t tmp[256];
+	uint8_t tmp[4096];
 	size_t len;
 
 	ret = scte35_splice_info_section_packTo(s, tmp, sizeof(tmp));
